@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Projet Hélios">
+<title>Projet Hélios - Accès Salle de Contrôle</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #000; overflow: hidden;
+    font-family: 'Courier New', monospace;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+  }
+  #terminal {
+    width: 100vw; min-height: 100vh; background: #000;
+    padding: 4vh 4vw; display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-start;
+    position: relative; transition: background 0.4s;
+  }
+  #status-text {
+    color: #ff2a2a; font-size: clamp(20px, 3.5vw, 32px);
+    font-weight: 700; text-align: center; letter-spacing: 1px;
+    line-height: 1.4; margin-bottom: 3vh; text-transform: uppercase;
+    max-width: 90vw; transition: color 0.3s;
+  }
+  #lock-icon, #failed-x { margin-bottom: 3vh; }
+  #error-msg {
+    display: none; color: #ff2a2a;
+    font-size: clamp(14px, 2vw, 18px);
+    margin-bottom: 2vh; text-align: center; font-weight: 700;
+    min-height: 22px;
+  }
+  #password-input {
+    width: min(360px, 80vw); padding: 16px 20px;
+    font-size: clamp(16px, 2.2vw, 20px);
+    background: #fff; color: #000; border: 2px solid #fff;
+    border-radius: 6px; text-align: center;
+    font-family: 'Courier New', monospace; letter-spacing: 2px;
+    outline: none; cursor: pointer;
+  }
+  #password-input::placeholder { color: #999; }
+  #enter-btn {
+    margin-top: 2vh; padding: 14px 42px;
+    background: #22c55e; color: #000;
+    font-size: clamp(16px, 2.2vw, 20px);
+    font-weight: 700; border: none; border-radius: 6px;
+    cursor: pointer; font-family: 'Courier New', monospace;
+    letter-spacing: 3px;
+  }
+  #enter-btn:active { background: #16a34a; transform: scale(0.97); }
+  #keyboard {
+    display: block; margin-top: 2.5vh;
+    background: #1a1a1a; padding: 12px; border-radius: 10px;
+    max-width: 96vw;
+  }
+  .kb-row { display: flex; gap: 5px; justify-content: center; margin-bottom: 5px; }
+  .kb-row:last-child { margin-bottom: 0; }
+  .kb-key {
+    min-width: clamp(36px, 6vw, 56px);
+    height: clamp(44px, 7vw, 60px);
+    padding: 0 8px;
+    background: #2a2a2a; color: #fff;
+    border: 1px solid #444; border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: clamp(15px, 2vw, 20px);
+    font-weight: 700; cursor: pointer;
+    transition: background 0.1s;
+  }
+  .kb-key:active { background: #555; transform: scale(0.92); }
+  .kb-wide { min-width: clamp(72px, 12vw, 100px); }
+  #menu-container {
+    display: none; position: absolute; top: 12px; right: 16px; z-index: 20;
+  }
+  #menu-btn {
+    background: transparent; border: none; color: #fff;
+    font-size: 36px; cursor: pointer; padding: 4px 14px;
+    line-height: 1; font-weight: 700;
+  }
+  #reset-panel {
+    display: none; position: absolute; top: 50px; right: 0;
+    background: #1a1a1a; padding: 14px; border-radius: 8px;
+    border: 1px solid #444; min-width: 240px;
+  }
+  #reset-panel-label {
+    color: #fff; font-size: 14px; margin-bottom: 8px;
+    font-family: 'Courier New', monospace;
+  }
+  #reset-input {
+    width: 100%; padding: 10px 12px; font-size: 15px;
+    background: #fff; color: #000;
+    border: 1px solid #fff; border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    outline: none; transition: border-color 0.2s;
+  }
+  #fullscreen-hint {
+    position: absolute; bottom: 8px; right: 12px;
+    color: #444; font-size: 11px; cursor: pointer;
+    font-family: 'Courier New', monospace;
+  }
+
+  /* ───────── RED BUTTON OVERLAY ───────── */
+  #overlay-red {
+    position: fixed; inset: 0; z-index: 500;
+    background: #1a0000;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 4vh 5vw;
+  }
+  #overlay-red.active { display: flex; }
+  .red-label {
+    color: #fff; font-size: clamp(13px, 1.8vw, 16px);
+    margin-bottom: 3vh; text-align: center;
+    letter-spacing: 2px; text-transform: uppercase;
+    max-width: 320px; line-height: 1.5;
+  }
+  .red-btn {
+    width: min(72vmin, 540px); height: min(72vmin, 540px);
+    border-radius: 50%; border: 6px solid #800000;
+    background: radial-gradient(circle at 35% 35%, #ff3a3a 0%, #c40000 60%, #700000 100%);
+    cursor: pointer; touch-action: none;
+    box-shadow: 0 0 60px rgba(255, 0, 0, 0.45),
+                inset 0 -20px 30px rgba(0,0,0,0.4),
+                inset 0 20px 40px rgba(255,180,180,0.2);
+    user-select: none;
+    transition: transform 0.1s, box-shadow 0.15s;
+  }
+  .red-btn.pressing {
+    transform: scale(0.96);
+    box-shadow: 0 0 80px rgba(255, 0, 0, 0.7),
+                inset 0 -10px 20px rgba(0,0,0,0.5),
+                inset 0 30px 50px rgba(255,200,200,0.3);
+  }
+  .red-code {
+    margin-top: 4vh;
+    color: #fff; font-size: clamp(48px, 9vw, 90px);
+    font-weight: 900; letter-spacing: 18px;
+    font-family: 'Courier New', monospace;
+    min-height: 1.2em;
+    text-shadow: 0 0 24px rgba(255, 200, 200, 0.9);
+  }
+
+  /* ───────── END OVERLAYS ───────── */
+  #overlay-end {
+    position: fixed; inset: 0; z-index: 800;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 6vh 5vw; text-align: center;
+  }
+  #overlay-end.active { display: flex; }
+  #overlay-end.victory {
+    background: radial-gradient(ellipse at center, #0a3d1a 0%, #062a10 70%);
+  }
+  #overlay-end.defeat {
+    background: radial-gradient(ellipse at center, #3d0a0a 0%, #2a0606 70%);
+  }
+  .end-title {
+    font-size: clamp(24px, 5vw, 42px);
+    font-weight: 900; line-height: 1.3;
+    letter-spacing: 2px; white-space: pre-line;
+  }
+  #overlay-end.victory .end-title { color: #6bff9a; }
+  #overlay-end.defeat .end-title { color: #ff6b6b; }
+</style>
+</head>
+<body>
+
+<div id="terminal">
+
+  <div id="menu-container">
+    <button id="menu-btn">&#8942;</button>
+    <div id="reset-panel">
+      <div id="reset-panel-label">Reset ?</div>
+      <input id="reset-input" type="text" autocomplete="off" spellcheck="false">
+    </div>
+  </div>
+
+  <div id="status-text">
+    ACCÈS SALLE DE CONTRÔLE INTERDIT<br>VEUILLEZ ENTRER LE MOT DE PASSE
+  </div>
+
+  <svg id="lock-icon" width="120" height="140" viewBox="0 0 110 130" xmlns="http://www.w3.org/2000/svg">
+    <path id="shackle" d="M 30 60 L 30 35 A 25 25 0 0 1 80 35 L 80 60" stroke="#ff2a2a" stroke-width="9" fill="none" stroke-linecap="round"/>
+    <rect id="lock-body" x="18" y="60" width="74" height="58" rx="6" fill="#ff2a2a"/>
+    <circle cx="55" cy="83" r="6" fill="#000"/>
+    <rect x="52" y="87" width="6" height="16" fill="#000"/>
+  </svg>
+
+  <svg id="failed-x" width="140" height="140" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" style="display: none;">
+    <line x1="20" y1="20" x2="100" y2="100" stroke="#000" stroke-width="14" stroke-linecap="round"/>
+    <line x1="100" y1="20" x2="20" y2="100" stroke="#000" stroke-width="14" stroke-linecap="round"/>
+  </svg>
+
+  <div id="error-msg"></div>
+
+  <input type="text" id="password-input" placeholder="Mot de passe..." autocomplete="off" spellcheck="false" readonly>
+
+  <button id="enter-btn">ENTER</button>
+
+  <div id="keyboard">
+    <div class="kb-row">
+      <button class="kb-key" data-key="A">A</button>
+      <button class="kb-key" data-key="Z">Z</button>
+      <button class="kb-key" data-key="E">E</button>
+      <button class="kb-key" data-key="R">R</button>
+      <button class="kb-key" data-key="T">T</button>
+      <button class="kb-key" data-key="Y">Y</button>
+      <button class="kb-key" data-key="U">U</button>
+      <button class="kb-key" data-key="I">I</button>
+      <button class="kb-key" data-key="O">O</button>
+      <button class="kb-key" data-key="P">P</button>
+    </div>
+    <div class="kb-row">
+      <button class="kb-key" data-key="Q">Q</button>
+      <button class="kb-key" data-key="S">S</button>
+      <button class="kb-key" data-key="D">D</button>
+      <button class="kb-key" data-key="F">F</button>
+      <button class="kb-key" data-key="G">G</button>
+      <button class="kb-key" data-key="H">H</button>
+      <button class="kb-key" data-key="J">J</button>
+      <button class="kb-key" data-key="K">K</button>
+      <button class="kb-key" data-key="L">L</button>
+      <button class="kb-key" data-key="M">M</button>
+    </div>
+    <div class="kb-row">
+      <button class="kb-key" data-key="W">W</button>
+      <button class="kb-key" data-key="X">X</button>
+      <button class="kb-key" data-key="C">C</button>
+      <button class="kb-key" data-key="V">V</button>
+      <button class="kb-key" data-key="B">B</button>
+      <button class="kb-key" data-key="N">N</button>
+      <button class="kb-key kb-wide" data-key="BACK">&larr;</button>
+    </div>
+    <div class="kb-row">
+      <button class="kb-key" data-key="0">0</button>
+      <button class="kb-key" data-key="1">1</button>
+      <button class="kb-key" data-key="2">2</button>
+      <button class="kb-key" data-key="3">3</button>
+      <button class="kb-key" data-key="4">4</button>
+      <button class="kb-key" data-key="5">5</button>
+      <button class="kb-key" data-key="6">6</button>
+      <button class="kb-key" data-key="7">7</button>
+      <button class="kb-key" data-key="8">8</button>
+      <button class="kb-key" data-key="9">9</button>
+    </div>
+  </div>
+
+  <div id="fullscreen-hint">Plein écran</div>
+</div>
+
+<!-- ───────── RED BUTTON OVERLAY ───────── -->
+<div id="overlay-red">
+  <div class="red-label">Maintenir le contact sur les trois appareils simultanément</div>
+  <div class="red-btn" id="red-btn"></div>
+  <div class="red-code" id="red-code">_ _ _</div>
+</div>
+
+<!-- ───────── END OVERLAYS ───────── -->
+<div id="overlay-end">
+  <div class="end-title" id="end-title"></div>
+</div>
+
+<script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+<script>
+(function() {
+  const PASSWORD = "HELIOS07042019";
+  const RESET_PASSWORD = "ARGALI";
+  const MAX_ATTEMPTS = 3;
+  const DEVICE_ID = 'tablette';
+  const CODE_FRAGMENT = '_ 7 _'; // tablette d'accès shows middle digit (7)
+
+  let attempts = 0;
+  let state = "initial";
+
+  // Ably (existing door channel)
+  let _ablyDoorChannel = null;
+  // Ably (new control channel)
+  let _ablyControlChannel = null;
+  try {
+    const _ably = new Ably.Realtime('2-HTpw.um5J9g:1h7mQARfiS4itHjEHeteJhBb09drdSetOUpFHIaA28U');
+    _ablyDoorChannel = _ably.channels.get('helios-door');
+    _ablyControlChannel = _ably.channels.get('helios-control');
+    _ablyControlChannel.subscribe(onControlMessage);
+  } catch(e) { console.warn('Ably init:', e); }
+
+  // BroadcastChannel fallback
+  let _bcControl = null;
+  try {
+    _bcControl = new BroadcastChannel('helios-control');
+    _bcControl.onmessage = (e) => onControlMessage(e.data);
+  } catch(e) {}
+
+  const terminal = document.getElementById("terminal");
+  const input = document.getElementById("password-input");
+  const keyboard = document.getElementById("keyboard");
+  const statusText = document.getElementById("status-text");
+  const lockIcon = document.getElementById("lock-icon");
+  const failedX = document.getElementById("failed-x");
+  const errorMsg = document.getElementById("error-msg");
+  const enterBtn = document.getElementById("enter-btn");
+  const menuContainer = document.getElementById("menu-container");
+  const menuBtn = document.getElementById("menu-btn");
+  const resetPanel = document.getElementById("reset-panel");
+  const resetInput = document.getElementById("reset-input");
+  const shackle = document.getElementById("shackle");
+  const lockBody = document.getElementById("lock-body");
+  const fsHint = document.getElementById("fullscreen-hint");
+
+  function resetToInitial() {
+    state = "initial";
+    try { localStorage.setItem('helios_door_status', 'CLOSED'); } catch(e) {}
+    try { new BroadcastChannel('helios_game').postMessage('DOOR_RESET'); } catch(e) {}
+    try { if (_ablyDoorChannel) _ablyDoorChannel.publish('status', 'DOOR_RESET'); } catch(e) {}
+    attempts = 0;
+    input.value = "";
+    input.style.display = "";
+    input.style.borderColor = "#fff";
+    enterBtn.style.display = "";
+    errorMsg.style.display = "none";
+    errorMsg.innerHTML = "";
+    statusText.innerHTML = "ACCÈS SALLE DE CONTRÔLE INTERDIT<br>VEUILLEZ ENTRER LE MOT DE PASSE";
+    statusText.style.color = "#ff2a2a";
+    terminal.style.background = "#000";
+    lockIcon.style.display = "";
+    shackle.setAttribute("d", "M 30 60 L 30 35 A 25 25 0 0 1 80 35 L 80 60");
+    shackle.setAttribute("stroke", "#ff2a2a");
+    lockBody.setAttribute("fill", "#ff2a2a");
+    failedX.style.display = "none";
+    menuContainer.style.display = "none";
+    resetPanel.style.display = "none";
+    resetInput.value = "";
+    resetInput.style.borderColor = "#fff";
+    fsHint.style.display = "";
+    keyboard.style.display = "block";
+  }
+
+  function setSuccessState() {
+    state = "success";
+    try { localStorage.setItem('helios_door_status', 'OPEN'); } catch(e) {}
+    try { new BroadcastChannel('helios_game').postMessage('DOOR_OPEN'); } catch(e) {}
+    try { if (_ablyDoorChannel) _ablyDoorChannel.publish('status', 'DOOR_OPEN'); } catch(e) {}
+    statusText.innerHTML = "ACCÈS SALLE DE CONTRÔLE AUTORISÉ";
+    statusText.style.color = "#22c55e";
+    shackle.setAttribute("d", "M 30 60 L 30 35 A 25 25 0 0 1 80 35 L 80 50");
+    shackle.setAttribute("stroke", "#22c55e");
+    lockBody.setAttribute("fill", "#22c55e");
+    input.style.display = "none";
+    enterBtn.style.display = "none";
+    keyboard.style.display = "none";
+    errorMsg.style.display = "none";
+    menuContainer.style.display = "block";
+    fsHint.style.display = "none";
+  }
+
+  function setFailedState() {
+    state = "failed";
+    terminal.style.background = "#dc2626";
+    statusText.innerHTML = "MISSION ÉCHOUÉE,<br>LA SALLE DE CONTRÔLE S'EST AUTO-DÉTRUITE.";
+    statusText.style.color = "#000";
+    lockIcon.style.display = "none";
+    failedX.style.display = "";
+    input.style.display = "none";
+    enterBtn.style.display = "none";
+    keyboard.style.display = "none";
+    errorMsg.style.display = "none";
+    menuContainer.style.display = "block";
+    fsHint.style.display = "none";
+  }
+
+  function validatePassword() {
+    if (state !== "initial") return;
+    if (input.value === PASSWORD) {
+      setSuccessState();
+    } else {
+      attempts++;
+      if (attempts >= MAX_ATTEMPTS) {
+        setFailedState();
+      } else {
+        const remaining = MAX_ATTEMPTS - attempts;
+        const plural = remaining > 1 ? "s" : "";
+        errorMsg.innerHTML = "Mot de passe incorrect, " + remaining + " tentative" + plural + " restante" + plural;
+        errorMsg.style.display = "block";
+        input.value = "";
+      }
+    }
+  }
+
+  function validateReset() {
+    if (resetInput.value.toUpperCase() === RESET_PASSWORD) {
+      resetToInitial();
+    } else {
+      resetInput.value = "";
+      resetInput.style.borderColor = "#ff2a2a";
+      setTimeout(function() {
+        resetInput.style.borderColor = "#fff";
+      }, 600);
+    }
+  }
+
+  input.addEventListener("click", function(e) {
+    e.stopPropagation();
+    if (state === "initial") keyboard.style.display = "block";
+  });
+
+  enterBtn.addEventListener("click", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    validatePassword();
+  });
+
+  document.querySelectorAll(".kb-key").forEach(function(btn) {
+    btn.addEventListener("click", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (state !== "initial") return;
+      const key = btn.getAttribute("data-key");
+      if (key === "BACK") {
+        input.value = input.value.slice(0, -1);
+      } else {
+        input.value += key;
+      }
+    });
+  });
+
+  menuBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    if (resetPanel.style.display === "block") {
+      resetPanel.style.display = "none";
+    } else {
+      resetPanel.style.display = "block";
+      setTimeout(function() { resetInput.focus(); }, 50);
+    }
+  });
+
+  resetInput.addEventListener("click", function(e) { e.stopPropagation(); });
+  resetInput.addEventListener("keydown", function(e) {
+    if (e.key === "Enter") { e.preventDefault(); validateReset(); }
+  });
+  resetInput.addEventListener("input", function() {
+    if (resetInput.value.toUpperCase() === RESET_PASSWORD) resetToInitial();
+  });
+
+  fsHint.addEventListener("click", function(e) {
+    e.stopPropagation();
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  });
+
+  document.addEventListener("click", function(e) {
+    if (state !== "initial" && !menuContainer.contains(e.target)) {
+      resetPanel.style.display = "none";
+    }
+  });
+
+  document.addEventListener("keydown", function(e) {
+    if (state === "initial" && e.key === "Enter" && document.activeElement !== resetInput) {
+      validatePassword();
+    }
+  });
+
+  /* ════════════════════════════════════════════════════════
+     CONTROL CHANNEL — Override / Master commands
+     ════════════════════════════════════════════════════════ */
+  const overlayRed = document.getElementById('overlay-red');
+  const redBtn = document.getElementById('red-btn');
+  const redCodeEl = document.getElementById('red-code');
+  const overlayEnd = document.getElementById('overlay-end');
+  const endTitle = document.getElementById('end-title');
+
+  let redLocalPressing = false;
+  let remotePressState = { phone: false, tablette: false, tableau: false };
+
+  function publishControl(name, data) {
+    data = data || {};
+    if (_ablyControlChannel) { try { _ablyControlChannel.publish(name, data); } catch(e) {} }
+    if (_bcControl) { try { _bcControl.postMessage({ name, data }); } catch(e) {} }
+  }
+
+  function onControlMessage(msg) {
+    const name = msg.name;
+    const data = msg.data || {};
+    console.log('[Tab] control:', name, data);
+
+    if (name === 'override-trigger') {
+      showRedButton();
+    } else if (name === 'press-state') {
+      if (data.device !== DEVICE_ID) {
+        remotePressState[data.device] = !!data.pressing;
+        updateRedCodeDisplay();
+      }
+    } else if (name === 'master-victory') {
+      showEnd('victory');
+    } else if (name === 'master-defeat') {
+      showEnd('defeat');
+    } else if (name === 'master-reset-red') {
+      hideRedButton();
+    } else if (name === 'master-clear-end') {
+      hideEnd();
+    } else if (name === 'master-reset-all') {
+      hideEnd();
+      hideRedButton();
+      resetToInitial();
+    }
+  }
+
+  function showRedButton() { overlayRed.classList.add('active'); }
+  function hideRedButton() {
+    overlayRed.classList.remove('active');
+    redLocalPressing = false;
+    remotePressState = { phone: false, tablette: false, tableau: false };
+    redCodeEl.textContent = '_ _ _';
+    redBtn.classList.remove('pressing');
+  }
+
+  redBtn.addEventListener('pointerdown', function(e) {
+    e.preventDefault();
+    redBtn.setPointerCapture(e.pointerId);
+    redLocalPressing = true;
+    remotePressState[DEVICE_ID] = true;
+    redBtn.classList.add('pressing');
+    publishControl('press-state', { device: DEVICE_ID, pressing: true });
+    updateRedCodeDisplay();
+  });
+  function releaseRedBtn() {
+    if (!redLocalPressing) return;
+    redLocalPressing = false;
+    remotePressState[DEVICE_ID] = false;
+    redBtn.classList.remove('pressing');
+    publishControl('press-state', { device: DEVICE_ID, pressing: false });
+    updateRedCodeDisplay();
+  }
+  redBtn.addEventListener('pointerup', releaseRedBtn);
+  redBtn.addEventListener('pointercancel', releaseRedBtn);
+  redBtn.addEventListener('pointerleave', releaseRedBtn);
+
+  function updateRedCodeDisplay() {
+    const allPressed = remotePressState.phone && remotePressState.tablette && remotePressState.tableau;
+    redCodeEl.textContent = allPressed ? CODE_FRAGMENT : '_ _ _';
+  }
+
+  function showEnd(kind) {
+    overlayEnd.classList.remove('victory', 'defeat');
+    overlayEnd.classList.add(kind);
+    if (kind === 'victory') endTitle.textContent = 'VOUS AVEZ SAUVÉ LE PROJET HÉLIOS,\nFÉLICITATIONS';
+    else endTitle.textContent = "VOUS N'ÊTES PAS PARVENUS À SAUVER\nLE PROJET HÉLIOS\n\nVOUS ÊTES MORTS ASPHYXIÉS";
+    overlayEnd.classList.add('active');
+  }
+  function hideEnd() { overlayEnd.classList.remove('active'); }
+})();
+</script>
+</body>
+</html>

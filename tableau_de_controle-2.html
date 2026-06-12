@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tableau Hélios">
+<title>Tableau de Contrôle — Projet Hélios</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #000; overflow: hidden;
+    font-family: 'Courier New', monospace;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none; touch-action: manipulation;
+    color: #fff;
+  }
+
+  /* ───────────────────── PAGES ───────────────────── */
+  .page {
+    position: fixed; inset: 0;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: flex-start;
+    padding: 4vh 4vw; overflow: auto;
+    background: #000;
+  }
+  .page.active { display: flex; }
+
+  /* ───────────────────── WIRES PAGE ───────────────────── */
+  #page-wires {
+    background: radial-gradient(ellipse at center, #1a0a0a 0%, #000 70%);
+    justify-content: center;
+  }
+  #wires-header {
+    color: #ff2a2a; font-size: clamp(18px, 3.2vw, 28px);
+    font-weight: 700; text-align: center; margin-bottom: 2vh;
+    letter-spacing: 1px; text-transform: uppercase;
+    animation: blink-warn 1.8s infinite;
+  }
+  #wires-sub {
+    color: #aaa; font-size: clamp(12px, 1.6vw, 15px);
+    text-align: center; margin-bottom: 3vh;
+  }
+  @keyframes blink-warn { 0%, 70%, 100% { opacity: 1 } 35% { opacity: 0.45 } }
+
+  #wires-box {
+    width: min(720px, 96vw);
+    background: #0a0a0a; border: 2px solid #2a2a2a;
+    border-radius: 12px; padding: 24px;
+    box-shadow: 0 0 40px rgba(255,42,42,0.15) inset;
+  }
+  #wires-svg { width: 100%; height: auto; display: block; }
+
+  #pliers-zone {
+    margin-top: 18px;
+    display: flex; justify-content: center; align-items: center;
+    height: 80px; position: relative;
+  }
+  #pliers {
+    width: 70px; height: 70px;
+    cursor: grab; touch-action: none;
+    transition: transform 0.15s;
+    user-select: none; -webkit-user-drag: none;
+  }
+  #pliers.dragging { cursor: grabbing; transform: scale(1.1); }
+  #pliers-label {
+    color: #666; font-size: 11px; margin-top: 4px;
+    text-align: center;
+  }
+
+  .wire {
+    fill: none; stroke-width: 8; stroke-linecap: round;
+    transition: opacity 0.2s;
+  }
+  .wire.cut { opacity: 0.35; }
+  .wire-half {
+    fill: none; stroke-width: 8; stroke-linecap: round;
+  }
+  .endpoint { fill: #222; stroke: #555; stroke-width: 2; }
+  .junction { fill: #1a1a1a; stroke: #555; stroke-width: 2; }
+
+  #wires-shake.shaking { animation: shake 0.45s; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    15%, 55% { transform: translateX(-14px); }
+    35%, 75% { transform: translateX(14px); }
+  }
+
+  /* ───────────────────── DASHBOARD ───────────────────── */
+  #page-dashboard {
+    background: linear-gradient(160deg, #0a1424 0%, #0a0a0f 100%);
+    padding: 5vh 4vw;
+  }
+  .dash-title {
+    color: #d9e6ff; font-size: clamp(18px, 2.6vw, 24px);
+    font-weight: 700; text-align: center; margin-bottom: 1vh;
+    letter-spacing: 2px; text-transform: uppercase;
+  }
+  .dash-subtitle {
+    color: #ff8888; font-size: clamp(13px, 1.8vw, 16px);
+    text-align: center; margin-bottom: 4vh;
+    font-style: italic;
+  }
+  .dash-buttons {
+    display: flex; flex-direction: column; gap: 14px;
+    width: 100%; max-width: 540px;
+  }
+  .station-btn {
+    padding: 22px 24px; border-radius: 10px;
+    border: 2px solid #ff2a2a;
+    background: rgba(255, 42, 42, 0.12);
+    color: #fff; font-size: clamp(18px, 2.4vw, 22px);
+    font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 2px; transition: all 0.3s;
+  }
+  .station-btn:active { transform: scale(0.98); }
+  .station-btn .status-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #ff2a2a; box-shadow: 0 0 12px #ff2a2a;
+    animation: pulse-dot 1.4s infinite;
+  }
+  .station-btn.ok {
+    border-color: #22c55e; background: rgba(34, 197, 94, 0.12);
+  }
+  .station-btn.ok .status-dot {
+    background: #22c55e; box-shadow: 0 0 12px #22c55e;
+    animation: none;
+  }
+  @keyframes pulse-dot { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }
+
+  /* ───────────────────── STATION PAGES ───────────────────── */
+  .station-page { background: #0a1424; }
+  .station-back {
+    position: absolute; top: 20px; left: 20px;
+    background: none; border: 1px solid #444;
+    color: #aaa; font-size: 18px; font-family: inherit;
+    padding: 6px 14px; border-radius: 6px; cursor: pointer;
+  }
+  .station-back:active { background: rgba(255,255,255,0.08); }
+  .station-title {
+    color: #d9e6ff; font-size: clamp(28px, 4vw, 38px);
+    font-weight: 800; margin-top: 6vh; margin-bottom: 2vh;
+    letter-spacing: 3px; text-align: center;
+  }
+  .station-waiting {
+    color: #ff8888; font-size: clamp(13px, 1.8vw, 16px);
+    margin-bottom: 4vh; text-align: center;
+    font-style: italic;
+    animation: blink-warn 2s infinite;
+  }
+  .station-label {
+    color: #aac; font-size: clamp(14px, 1.9vw, 17px);
+    margin-bottom: 1vh; text-align: center;
+  }
+  .station-input {
+    width: min(360px, 80vw); padding: 16px 18px;
+    background: rgba(255,255,255,0.08);
+    border: 2px solid rgba(120, 160, 220, 0.4);
+    border-radius: 8px; color: #fff;
+    font-size: clamp(18px, 2.4vw, 22px);
+    text-align: center; font-family: inherit;
+    letter-spacing: 2px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .station-input:focus { border-color: #4d8cff; background: rgba(255,255,255,0.12); }
+  .station-input.shake { animation: shake 0.4s; border-color: #ff4444 !important; }
+  .station-input.ok { border-color: #22c55e !important; background: rgba(34,197,94,0.18); }
+  .station-validate {
+    margin-top: 2vh; padding: 14px 36px;
+    background: #4d8cff; border: none;
+    color: #fff; font-size: clamp(15px, 2vw, 17px);
+    font-weight: 700; border-radius: 8px;
+    cursor: pointer; font-family: inherit;
+    letter-spacing: 3px;
+  }
+  .station-validate:active { background: #3a6ed4; }
+  .station-validate:disabled { opacity: 0.4; cursor: default; }
+
+  .gamma-grid {
+    display: flex; flex-direction: column; gap: 14px;
+    margin-bottom: 2vh;
+  }
+  .gamma-row {
+    display: flex; align-items: center; gap: 14px;
+    justify-content: center;
+  }
+  .gamma-label {
+    color: #d9e6ff; font-size: clamp(22px, 3vw, 28px);
+    font-weight: 700; min-width: 36px; text-align: center;
+  }
+  .gamma-input {
+    width: 80px; padding: 12px;
+    background: rgba(255,255,255,0.08);
+    border: 2px solid rgba(120, 160, 220, 0.4);
+    border-radius: 8px; color: #fff;
+    font-size: 22px; text-align: center; font-family: inherit;
+    outline: none;
+  }
+  .gamma-input:focus { border-color: #4d8cff; }
+  .gamma-input.shake { animation: shake 0.4s; border-color: #ff4444 !important; }
+
+  /* ───────────────────── VALIDATION ───────────────────── */
+  #page-validation {
+    background: linear-gradient(160deg, #0a2418 0%, #0a0f0a 100%);
+    justify-content: center;
+  }
+  .validation-icon {
+    font-size: 80px; color: #22c55e;
+    margin-bottom: 3vh;
+    animation: validation-pulse 1.6s infinite;
+  }
+  @keyframes validation-pulse { 0%, 100% { transform: scale(1) } 50% { transform: scale(1.1) } }
+  .validation-title {
+    color: #22c55e; font-size: clamp(24px, 3.4vw, 32px);
+    font-weight: 800; text-align: center; margin-bottom: 1.5vh;
+    letter-spacing: 2px;
+  }
+  .validation-sub {
+    color: #88e6a8; font-size: clamp(15px, 2vw, 18px);
+    text-align: center;
+  }
+
+  /* ───────────────────── LOADING ───────────────────── */
+  #page-loading { background: #000; justify-content: center; }
+  .loading-text {
+    color: #4d8cff; font-size: clamp(18px, 2.6vw, 24px);
+    font-weight: 700; text-align: center; margin-bottom: 4vh;
+    letter-spacing: 2px;
+  }
+  .loading-bar-outer {
+    width: min(520px, 86vw); height: 16px;
+    background: #0a0f1c; border: 1px solid #1a2a4a;
+    border-radius: 8px; overflow: hidden;
+  }
+  .loading-bar-inner {
+    height: 100%; width: 0;
+    background: linear-gradient(90deg, #4d8cff, #6ba8ff);
+    transition: width 0.2s linear;
+    box-shadow: 0 0 18px rgba(77, 140, 255, 0.7);
+  }
+  .loading-pct {
+    margin-top: 2vh; color: #888; font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ───────────────────── FACE RECOGNITION ───────────────────── */
+  #page-face { background: #050a14; padding: 3vh 4vw; }
+  .face-warning {
+    color: #ff8800; font-size: clamp(15px, 2vw, 18px);
+    font-weight: 700; text-align: center;
+    letter-spacing: 1px; text-transform: uppercase;
+    margin-bottom: 1vh;
+  }
+  .face-title {
+    color: #d9e6ff; font-size: clamp(20px, 2.6vw, 24px);
+    font-weight: 700; text-align: center;
+    margin-bottom: 1vh; letter-spacing: 1px;
+  }
+  .face-sub {
+    color: #88a; font-size: clamp(12px, 1.6vw, 14px);
+    text-align: center; margin-bottom: 3vh;
+  }
+  .face-status {
+    color: #ff8800; font-size: clamp(14px, 1.9vw, 17px);
+    text-align: center; margin-bottom: 2vh;
+    min-height: 24px; font-weight: 600;
+  }
+  .face-status.analyzing { color: #4d8cff; }
+  .face-status.confirmed { color: #22c55e; }
+  .face-circle-wrap {
+    position: relative; width: min(340px, 70vw);
+    aspect-ratio: 1; margin: 0 auto;
+  }
+  .face-circle {
+    width: 100%; height: 100%;
+    border-radius: 50%; overflow: hidden;
+    background: #111;
+    border: 4px solid #4d8cff;
+    box-shadow: 0 0 30px rgba(77, 140, 255, 0.5);
+    position: relative;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .face-circle.analyzing {
+    border-color: #ffaa00; box-shadow: 0 0 30px rgba(255, 170, 0, 0.6);
+    animation: scan-ring 1.2s infinite;
+  }
+  .face-circle.confirmed {
+    border-color: #22c55e; box-shadow: 0 0 40px rgba(34, 197, 94, 0.8);
+  }
+  @keyframes scan-ring {
+    0%, 100% { box-shadow: 0 0 20px rgba(255, 170, 0, 0.5); }
+    50% { box-shadow: 0 0 40px rgba(255, 170, 0, 0.9); }
+  }
+  #face-video {
+    width: 100%; height: 100%;
+    object-fit: cover; transform: scaleX(-1);
+    background: #111;
+  }
+  .face-overlay {
+    position: absolute; inset: 0; border-radius: 50%;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg, transparent 0, transparent 3px, rgba(77,140,255,0.06) 3px, rgba(77,140,255,0.06) 4px
+    );
+  }
+  .face-progress {
+    margin-top: 3vh; width: min(340px, 70vw); height: 6px;
+    background: #1a2a4a; border-radius: 3px;
+    overflow: hidden; margin-left: auto; margin-right: auto;
+    display: none;
+  }
+  .face-progress.active { display: block; }
+  .face-progress-inner {
+    height: 100%; width: 0;
+    background: #4d8cff;
+    transition: width 0.1s linear;
+  }
+  .face-timestamp {
+    position: absolute; top: 20px; right: 20px;
+    color: #444; font-size: 12px; font-variant-numeric: tabular-nums;
+    cursor: default;
+  }
+
+  /* ───────────────────── VENTILATION REACTIVEE ───────────────────── */
+  #page-ventilation {
+    background: linear-gradient(160deg, #0a2418 0%, #0a0f0a 100%);
+    justify-content: center;
+  }
+  .vent-icon {
+    width: clamp(120px, 18vw, 180px);
+    height: clamp(120px, 18vw, 180px);
+    margin-bottom: 3vh;
+    animation: vent-spin 2.5s linear infinite;
+  }
+  @keyframes vent-spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+  .vent-title {
+    color: #22c55e; font-size: clamp(26px, 4vw, 36px);
+    font-weight: 800; text-align: center; margin-bottom: 1.5vh;
+    letter-spacing: 3px;
+    text-shadow: 0 0 24px rgba(34, 197, 94, 0.5);
+  }
+  .vent-sub {
+    color: #88e6a8; font-size: clamp(15px, 2vw, 18px);
+    text-align: center; letter-spacing: 1px;
+  }
+
+  /* ───────────────────── OVERLAY: RED BUTTON ───────────────────── */
+  #overlay-red {
+    position: fixed; inset: 0; z-index: 500;
+    background: #1a0000;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  #overlay-red.active { display: flex; }
+  .red-btn-label {
+    color: #fff; font-size: clamp(13px, 1.8vw, 16px);
+    margin-bottom: 3vh; text-align: center;
+    letter-spacing: 2px; text-transform: uppercase;
+  }
+  .red-btn {
+    width: min(72vmin, 540px); height: min(72vmin, 540px);
+    border-radius: 50%; border: 6px solid #800000;
+    background: radial-gradient(circle at 35% 35%, #ff3a3a 0%, #c40000 60%, #700000 100%);
+    cursor: pointer; touch-action: none;
+    box-shadow: 0 0 60px rgba(255, 0, 0, 0.45),
+                inset 0 -20px 30px rgba(0,0,0,0.4),
+                inset 0 20px 40px rgba(255,180,180,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-family: inherit; color: #fff;
+    font-size: clamp(22px, 4vw, 36px); font-weight: 900;
+    letter-spacing: 4px; user-select: none;
+    transition: transform 0.1s, box-shadow 0.15s;
+  }
+  .red-btn.pressing {
+    transform: scale(0.96);
+    box-shadow: 0 0 80px rgba(255, 0, 0, 0.7),
+                inset 0 -10px 20px rgba(0,0,0,0.5),
+                inset 0 30px 50px rgba(255,200,200,0.3);
+  }
+  .red-code {
+    margin-top: 4vh;
+    color: #fff; font-size: clamp(48px, 9vw, 90px);
+    font-weight: 900; letter-spacing: 18px;
+    font-family: 'Courier New', monospace;
+    min-height: 1.2em;
+    text-shadow: 0 0 24px rgba(255, 200, 200, 0.9);
+  }
+
+  /* ───────────────────── OVERLAY: END STATES ───────────────────── */
+  #overlay-end {
+    position: fixed; inset: 0; z-index: 800;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 6vh 5vw; text-align: center;
+  }
+  #overlay-end.active { display: flex; }
+  #overlay-end.victory {
+    background: radial-gradient(ellipse at center, #0a3d1a 0%, #062a10 70%);
+  }
+  #overlay-end.defeat {
+    background: radial-gradient(ellipse at center, #3d0a0a 0%, #2a0606 70%);
+  }
+  .end-title {
+    font-size: clamp(28px, 5vw, 52px);
+    font-weight: 900; line-height: 1.25;
+    letter-spacing: 2px;
+    text-shadow: 0 0 30px rgba(0,0,0,0.5);
+  }
+  #overlay-end.victory .end-title { color: #6bff9a; }
+  #overlay-end.defeat .end-title { color: #ff6b6b; }
+
+  /* ───────────────────── DEBUG / HINT ───────────────────── */
+  #fs-hint {
+    position: fixed; bottom: 6px; right: 10px;
+    color: #333; font-size: 10px;
+    cursor: pointer; z-index: 1000;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════ PAGE 1 : WIRES ═══════════════════════ -->
+<div class="page active" id="page-wires">
+  <div id="wires-shake">
+    <div id="wires-header">⚠ Verrouillage sécurité ⚠</div>
+    <div id="wires-sub">Découper les fils dans l'ordre du protocole.<br>Toute erreur réinitialise le circuit.</div>
+    <div id="wires-box">
+      <svg id="wires-svg" viewBox="0 0 700 280" preserveAspectRatio="xMidYMid meet">
+        <!-- Left junction -->
+        <rect class="junction" x="20" y="40" width="50" height="200" rx="6"/>
+        <!-- Right junction -->
+        <rect class="junction" x="630" y="40" width="50" height="200" rx="6"/>
+
+        <!-- Endpoints left -->
+        <circle class="endpoint" cx="70" cy="70"  r="9"/>
+        <circle class="endpoint" cx="70" cy="120" r="9"/>
+        <circle class="endpoint" cx="70" cy="170" r="9"/>
+        <circle class="endpoint" cx="70" cy="220" r="9"/>
+        <!-- Endpoints right -->
+        <circle class="endpoint" cx="630" cy="70"  r="9"/>
+        <circle class="endpoint" cx="630" cy="120" r="9"/>
+        <circle class="endpoint" cx="630" cy="170" r="9"/>
+        <circle class="endpoint" cx="630" cy="220" r="9"/>
+
+        <!-- Wires (4 colors, entangled with crossings) -->
+        <!-- yellow: left 70 → right 170 (crosses down) -->
+        <path id="wire-yellow" class="wire" stroke="#ffd633"
+              d="M 70 70 C 250 70, 250 220, 350 220 S 450 70, 630 170"/>
+        <!-- blue: left 120 → right 70 (crosses up) -->
+        <path id="wire-blue" class="wire" stroke="#3a8cff"
+              d="M 70 120 C 220 120, 280 220, 350 170 S 480 120, 630 70"/>
+        <!-- green: left 170 → right 220 (snakes) -->
+        <path id="wire-green" class="wire" stroke="#22c55e"
+              d="M 70 170 C 230 170, 240 70, 350 120 S 500 250, 630 220"/>
+        <!-- red: left 220 → right 120 (crosses up) -->
+        <path id="wire-red" class="wire" stroke="#ff3a3a"
+              d="M 70 220 C 220 220, 260 120, 350 70 S 490 200, 630 120"/>
+
+        <!-- Hit zones (invisible, where pliers can cut) -->
+        <circle id="hit-yellow" data-color="yellow" cx="350" cy="220" r="36" fill="transparent"/>
+        <circle id="hit-blue"   data-color="blue"   cx="350" cy="170" r="36" fill="transparent"/>
+        <circle id="hit-green"  data-color="green"  cx="350" cy="120" r="36" fill="transparent"/>
+        <circle id="hit-red"    data-color="red"    cx="350" cy="70"  r="36" fill="transparent"/>
+      </svg>
+
+      <div id="pliers-zone">
+        <svg id="pliers" viewBox="0 0 64 64">
+          <!-- handles -->
+          <path d="M 12 56 L 28 36 L 32 40 L 16 60 Z" fill="#c0392b" stroke="#7f1d1d" stroke-width="1.5"/>
+          <path d="M 52 56 L 36 36 L 32 40 L 48 60 Z" fill="#c0392b" stroke="#7f1d1d" stroke-width="1.5"/>
+          <!-- jaws -->
+          <path d="M 28 36 L 32 22 L 36 36 Z" fill="#888" stroke="#444" stroke-width="1.5"/>
+          <circle cx="32" cy="38" r="2.5" fill="#222"/>
+        </svg>
+      </div>
+      <div id="pliers-label">Glisser la pince sur le fil à couper</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ PAGE 2 : DASHBOARD ═══════════════════════ -->
+<div class="page" id="page-dashboard">
+  <div class="dash-title">Tableau de bord atmosphérique</div>
+  <div class="dash-subtitle" id="dash-subtitle">
+    ⚠ Anomalie détectée : système de ventilation défaillant<br>
+    En attente de calibration
+  </div>
+  <div class="dash-buttons">
+    <button class="station-btn" id="btn-alpha" onclick="openStation('alpha')">
+      <span>STATION ALPHA</span><span class="status-dot"></span>
+    </button>
+    <button class="station-btn" id="btn-beta" onclick="openStation('beta')">
+      <span>STATION BÊTA</span><span class="status-dot"></span>
+    </button>
+    <button class="station-btn" id="btn-gamma" onclick="openStation('gamma')">
+      <span>STATION GAMMA</span><span class="status-dot"></span>
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════ PAGE ALPHA ═══════════════════════ -->
+<div class="page station-page" id="page-alpha">
+  <button class="station-back" onclick="backToDashboard()">← Retour</button>
+  <div class="station-title">STATION ALPHA</div>
+  <div class="station-waiting">En attente de recalibration</div>
+  <div class="station-label">Entrer la vitesse du vent (km/h)</div>
+  <input type="text" class="station-input" id="input-alpha" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="00,0">
+  <button class="station-validate" onclick="validateStation('alpha')">VALIDER</button>
+</div>
+
+<!-- ═══════════════════════ PAGE BETA ═══════════════════════ -->
+<div class="page station-page" id="page-beta">
+  <button class="station-back" onclick="backToDashboard()">← Retour</button>
+  <div class="station-title">STATION BÊTA</div>
+  <div class="station-waiting">En attente de recalibration</div>
+  <div class="station-label">Entrer le signal du capteur thermique</div>
+  <input type="text" class="station-input" id="input-beta" autocomplete="off" spellcheck="false" placeholder="?.?.?.">
+  <button class="station-validate" onclick="validateStation('beta')">VALIDER</button>
+</div>
+
+<!-- ═══════════════════════ PAGE GAMMA ═══════════════════════ -->
+<div class="page station-page" id="page-gamma">
+  <button class="station-back" onclick="backToDashboard()">← Retour</button>
+  <div class="station-title">STATION GAMMA</div>
+  <div class="station-waiting">En attente de recalibration</div>
+  <div class="station-label">Position des câbles haute tension</div>
+  <div class="gamma-grid">
+    <div class="gamma-row"><span class="gamma-label">α</span><input class="gamma-input" id="g-alpha" inputmode="numeric" maxlength="1"></div>
+    <div class="gamma-row"><span class="gamma-label">ß</span><input class="gamma-input" id="g-beta"  inputmode="numeric" maxlength="1"></div>
+    <div class="gamma-row"><span class="gamma-label">γ</span><input class="gamma-input" id="g-gamma" inputmode="numeric" maxlength="1"></div>
+    <div class="gamma-row"><span class="gamma-label">∆</span><input class="gamma-input" id="g-delta" inputmode="numeric" maxlength="1"></div>
+  </div>
+  <button class="station-validate" onclick="validateStation('gamma')">VALIDER</button>
+</div>
+
+<!-- ═══════════════════════ PAGE VALIDATION ═══════════════════════ -->
+<div class="page" id="page-validation">
+  <div class="validation-icon">✓</div>
+  <div class="validation-title">CALIBRATION ATMOSPHÉRIQUE&nbsp;:&nbsp;VALIDÉE</div>
+  <div class="validation-sub">✓ Paramètres dans les normes</div>
+</div>
+
+<!-- ═══════════════════════ PAGE LOADING ═══════════════════════ -->
+<div class="page" id="page-loading">
+  <div class="loading-text">RÉACTIVATION VENTILATION...</div>
+  <div class="loading-bar-outer"><div class="loading-bar-inner" id="loading-bar"></div></div>
+  <div class="loading-pct" id="loading-pct">0%</div>
+</div>
+
+<!-- ═══════════════════════ PAGE FACE ═══════════════════════ -->
+<div class="page" id="page-face">
+  <div class="face-timestamp" id="face-ts" onclick="adminTimestampClick()">09:21:04</div>
+  <div class="face-warning">⚠ Validation biométrique requise</div>
+  <div class="face-title">Reconnaissance faciale — Dr. M. Vasseur</div>
+  <div class="face-sub">Accès physique au terminal obligatoire</div>
+  <div class="face-status" id="face-status">En attente du sujet…</div>
+  <div class="face-circle-wrap">
+    <div class="face-circle" id="face-circle">
+      <video id="face-video" autoplay playsinline muted></video>
+      <div class="face-overlay"></div>
+    </div>
+  </div>
+  <div class="face-progress" id="face-progress"><div class="face-progress-inner" id="face-progress-inner"></div></div>
+</div>
+
+<!-- ═══════════════════════ PAGE VENTILATION REACTIVEE ═══════════════════════ -->
+<div class="page" id="page-ventilation">
+  <svg class="vent-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="48" fill="none" stroke="#22c55e" stroke-width="2" opacity="0.4"/>
+    <circle cx="50" cy="50" r="8" fill="#22c55e"/>
+    <path d="M 50 12 Q 65 30 50 50 Q 35 30 50 12 Z" fill="#22c55e" opacity="0.85"/>
+    <path d="M 50 12 Q 65 30 50 50 Q 35 30 50 12 Z" fill="#22c55e" opacity="0.85" transform="rotate(120 50 50)"/>
+    <path d="M 50 12 Q 65 30 50 50 Q 35 30 50 12 Z" fill="#22c55e" opacity="0.85" transform="rotate(240 50 50)"/>
+  </svg>
+  <div class="vent-title">VENTILATION RÉACTIVÉE</div>
+  <div class="vent-sub">Système atmosphérique nominal</div>
+</div>
+
+<!-- ═══════════════════════ OVERLAY : RED BUTTON ═══════════════════════ -->
+<div id="overlay-red">
+  <div class="red-btn-label">Maintenir simultanément sur les trois appareils</div>
+  <div class="red-btn" id="red-btn"></div>
+  <div class="red-code" id="red-code">_ _ _</div>
+</div>
+
+<!-- ═══════════════════════ OVERLAY : END ═══════════════════════ -->
+<div id="overlay-end">
+  <div class="end-title" id="end-title"></div>
+</div>
+
+<div id="fs-hint" onclick="goFullscreen()">Plein écran</div>
+
+<script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+<script>
+'use strict';
+
+/* ════════════════════════════════════════════════════════
+   CONFIG
+   ════════════════════════════════════════════════════════ */
+const DEVICE_ID = 'tableau';
+const CODE_FRAGMENT = '_ _ 6'; // tableau de contrôle shows last digit (6)
+const CORRECT_SEQUENCE = ['yellow', 'blue', 'green', 'red'];
+
+const ANSWERS = {
+  alpha: ['17,4', '17.4'],
+  beta:  ['r.a.s.', 'ras', 'r a s', 'r.a.s'],
+  gamma: { alpha: '4', beta: '3', gamma: '1', delta: '2' }
+};
+
+let currentPage = 'wires';
+let previousPage = 'wires';
+let cutSequence = [];
+let stationStatus = { alpha: false, beta: false, gamma: false };
+let videoStream = null;
+let faceAnalyzing = false;
+let faceConfirmed = false;
+
+/* ════════════════════════════════════════════════════════
+   PAGE NAVIGATION
+   ════════════════════════════════════════════════════════ */
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById('page-' + id);
+  if (el) {
+    el.classList.add('active');
+    currentPage = id;
+  }
+}
+
+function openStation(s) {
+  previousPage = 'dashboard'; // will return here
+  showPage(s);
+  setTimeout(() => {
+    const inp = document.getElementById(s === 'gamma' ? 'g-alpha' : 'input-' + s);
+    if (inp && !stationStatus[s]) inp.focus();
+  }, 100);
+}
+
+function backToDashboard() { showPage('dashboard'); }
+
+/* ════════════════════════════════════════════════════════
+   WIRE CUTTING
+   ════════════════════════════════════════════════════════ */
+const pliers = document.getElementById('pliers');
+const wiresSvg = document.getElementById('wires-svg');
+const wiresBox = document.getElementById('wires-box');
+const wiresShake = document.getElementById('wires-shake');
+
+let pliersDragging = false;
+let pliersStartX = 0, pliersStartY = 0;
+let pliersOrigX = 0, pliersOrigY = 0;
+
+pliers.addEventListener('pointerdown', startDrag);
+function startDrag(e) {
+  e.preventDefault();
+  pliersDragging = true;
+  pliers.classList.add('dragging');
+  pliers.setPointerCapture(e.pointerId);
+  const rect = pliers.getBoundingClientRect();
+  pliersStartX = e.clientX;
+  pliersStartY = e.clientY;
+  pliersOrigX = rect.left;
+  pliersOrigY = rect.top;
+  pliers.style.position = 'fixed';
+  pliers.style.left = pliersOrigX + 'px';
+  pliers.style.top = pliersOrigY + 'px';
+  pliers.style.zIndex = '999';
+}
+pliers.addEventListener('pointermove', moveDrag);
+function moveDrag(e) {
+  if (!pliersDragging) return;
+  const dx = e.clientX - pliersStartX;
+  const dy = e.clientY - pliersStartY;
+  pliers.style.left = (pliersOrigX + dx) + 'px';
+  pliers.style.top  = (pliersOrigY + dy) + 'px';
+}
+pliers.addEventListener('pointerup', endDrag);
+pliers.addEventListener('pointercancel', endDrag);
+function endDrag(e) {
+  if (!pliersDragging) return;
+  pliersDragging = false;
+  pliers.classList.remove('dragging');
+
+  // Reset pliers position FIRST (so it doesn't interfere with detection)
+  const dropX = e.clientX, dropY = e.clientY;
+  pliers.style.position = '';
+  pliers.style.left = '';
+  pliers.style.top  = '';
+  pliers.style.zIndex = '';
+
+  // Improved hit detection: scan ALONG each wire path
+  const hit = findClosestWire(dropX, dropY);
+  if (hit) {
+    const wireEl = document.getElementById('wire-' + hit.color);
+    if (wireEl && !wireEl.classList.contains('cut')) {
+      cutWire(hit.color, hit.lengthAtPoint);
+    }
+  }
+}
+
+// Sample many points along each wire's path; pick the closest one to drop point
+function findClosestWire(dropX, dropY) {
+  const svg = document.getElementById('wires-svg');
+  const ctm = svg.getScreenCTM();
+  if (!ctm) return null;
+
+  // Convert screen → SVG coordinates
+  const pt = svg.createSVGPoint();
+  pt.x = dropX; pt.y = dropY;
+  const svgPt = pt.matrixTransform(ctm.inverse());
+
+  const colors = ['yellow', 'blue', 'green', 'red'];
+  let best = null;
+
+  for (const c of colors) {
+    const wire = document.getElementById('wire-' + c);
+    if (!wire || wire.classList.contains('cut')) continue;
+    const total = wire.getTotalLength();
+    const samples = 80;
+    for (let i = 0; i <= samples; i++) {
+      const lenAt = (total * i) / samples;
+      const p = wire.getPointAtLength(lenAt);
+      const d = Math.hypot(p.x - svgPt.x, p.y - svgPt.y);
+      if (!best || d < best.dist) {
+        best = { color: c, dist: d, lengthAtPoint: lenAt };
+      }
+    }
+  }
+
+  // Threshold in SVG viewBox units (viewBox is 700x280)
+  // ~22 units = comfortable, generous tolerance for fingers/imprecision
+  if (best && best.dist < 22) return best;
+  return null;
+}
+
+function cutWire(color, lengthAtPoint) {
+  const wireEl = document.getElementById('wire-' + color);
+  wireEl.classList.add('cut');
+  // Create the visual gap exactly where the user cut
+  const total = wireEl.getTotalLength();
+  const gap = 22;
+  const before = Math.max(0, lengthAtPoint - gap / 2);
+  // pattern: on(before) – off(gap) – on(huge so no repeat artifact)
+  wireEl.style.strokeDasharray = `${before} ${gap} 99999`;
+  cutSequence.push(color);
+
+  // Check sequence
+  const expected = CORRECT_SEQUENCE[cutSequence.length - 1];
+  if (color !== expected) {
+    setTimeout(resetWires, 450);
+    return;
+  }
+  // All cuts correct → check if done
+  if (cutSequence.length === CORRECT_SEQUENCE.length) {
+    setTimeout(() => showPage('dashboard'), 600);
+  }
+}
+
+function resetWires() {
+  wiresShake.classList.add('shaking');
+  if (navigator.vibrate) navigator.vibrate([60, 40, 60, 40, 60]);
+  setTimeout(() => {
+    wiresShake.classList.remove('shaking');
+    document.querySelectorAll('.wire').forEach(w => {
+      w.classList.remove('cut');
+      w.style.strokeDasharray = '';
+    });
+    cutSequence = [];
+  }, 500);
+}
+
+/* ════════════════════════════════════════════════════════
+   STATION VALIDATION
+   ════════════════════════════════════════════════════════ */
+function validateStation(s) {
+  if (s === 'alpha') {
+    const v = document.getElementById('input-alpha').value.trim();
+    if (ANSWERS.alpha.includes(v)) markStationOk('alpha');
+    else shakeInput('input-alpha');
+  } else if (s === 'beta') {
+    const v = document.getElementById('input-beta').value.trim().toLowerCase().replace(/\s+/g, '');
+    const norm = v.replace(/\./g, '').trim();
+    if (norm === 'ras') markStationOk('beta');
+    else shakeInput('input-beta');
+  } else if (s === 'gamma') {
+    const a = document.getElementById('g-alpha').value.trim();
+    const b = document.getElementById('g-beta').value.trim();
+    const g = document.getElementById('g-gamma').value.trim();
+    const d = document.getElementById('g-delta').value.trim();
+    if (a === ANSWERS.gamma.alpha && b === ANSWERS.gamma.beta
+        && g === ANSWERS.gamma.gamma && d === ANSWERS.gamma.delta) {
+      markStationOk('gamma');
+    } else {
+      ['g-alpha','g-beta','g-gamma','g-delta'].forEach(id => shakeInput(id));
+    }
+  }
+}
+
+function shakeInput(id) {
+  const el = document.getElementById(id);
+  el.classList.remove('shake');
+  void el.offsetWidth;
+  el.classList.add('shake');
+  if (navigator.vibrate) navigator.vibrate(60);
+  setTimeout(() => el.classList.remove('shake'), 500);
+}
+
+function markStationOk(s) {
+  stationStatus[s] = true;
+  publish('station-validated', { station: s });
+  document.getElementById('btn-' + s).classList.add('ok');
+  // mark input(s) green
+  if (s === 'gamma') {
+    ['g-alpha','g-beta','g-gamma','g-delta'].forEach(id => {
+      document.getElementById(id).classList.add('ok');
+      document.getElementById(id).disabled = true;
+    });
+  } else {
+    const inp = document.getElementById('input-' + s);
+    inp.classList.add('ok');
+    inp.disabled = true;
+  }
+  setTimeout(() => {
+    showPage('dashboard');
+    checkAllStations();
+  }, 800);
+}
+
+function checkAllStations() {
+  if (stationStatus.alpha && stationStatus.beta && stationStatus.gamma) {
+    setTimeout(triggerValidationSequence, 600);
+  }
+}
+
+function triggerValidationSequence() {
+  showPage('validation');
+  setTimeout(() => {
+    showPage('loading');
+    runLoading();
+  }, 5000);
+}
+
+function runLoading() {
+  const bar = document.getElementById('loading-bar');
+  const pct = document.getElementById('loading-pct');
+  let p = 0;
+  const interval = setInterval(() => {
+    p += 1.2 + Math.random() * 1.4;
+    if (p >= 100) {
+      p = 100;
+      clearInterval(interval);
+      bar.style.width = '100%';
+      pct.textContent = '100%';
+      setTimeout(() => {
+        showPage('face');
+        startFaceRecognition();
+      }, 700);
+    } else {
+      bar.style.width = p + '%';
+      pct.textContent = Math.floor(p) + '%';
+    }
+  }, 80);
+}
+
+/* ════════════════════════════════════════════════════════
+   FACE RECOGNITION
+   ════════════════════════════════════════════════════════ */
+async function startFaceRecognition() {
+  const video = document.getElementById('face-video');
+  // update timestamp
+  updateFaceTimestamp();
+  setInterval(updateFaceTimestamp, 1000);
+
+  if (videoStream) return;
+  try {
+    videoStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user' }, audio: false
+    });
+    video.srcObject = videoStream;
+  } catch (err) {
+    document.getElementById('face-status').textContent = '⚠ Caméra non autorisée';
+    console.warn('Camera error:', err);
+  }
+}
+
+function updateFaceTimestamp() {
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  const ss = String(d.getSeconds()).padStart(2,'0');
+  document.getElementById('face-ts').textContent = hh + ':' + mm + ':' + ss;
+}
+
+let adminClicks = 0, adminTimer = null;
+function adminTimestampClick() {
+  adminClicks++;
+  clearTimeout(adminTimer);
+  adminTimer = setTimeout(() => { adminClicks = 0; }, 800);
+  if (adminClicks >= 3) {
+    adminClicks = 0;
+    if (!faceAnalyzing && !faceConfirmed) runFaceAnalysis();
+  }
+}
+
+function runFaceAnalysis() {
+  faceAnalyzing = true;
+  const status = document.getElementById('face-status');
+  const circle = document.getElementById('face-circle');
+  const prog = document.getElementById('face-progress');
+  const progInner = document.getElementById('face-progress-inner');
+
+  status.textContent = 'Analyse en cours…';
+  status.classList.add('analyzing');
+  circle.classList.add('analyzing');
+  prog.classList.add('active');
+
+  const duration = 6000;
+  const startTime = Date.now();
+  const interval = setInterval(() => {
+    const elapsed = Date.now() - startTime;
+    const ratio = Math.min(elapsed / duration, 1);
+    progInner.style.width = (ratio * 100) + '%';
+    if (ratio >= 1) {
+      clearInterval(interval);
+      confirmIdentity();
+    }
+  }, 50);
+}
+
+function confirmIdentity() {
+  faceConfirmed = true;
+  const status = document.getElementById('face-status');
+  const circle = document.getElementById('face-circle');
+  status.textContent = '✓ DR. MARC VASSEUR — IDENTITÉ CONFIRMÉE';
+  status.classList.remove('analyzing');
+  status.classList.add('confirmed');
+  circle.classList.remove('analyzing');
+  circle.classList.add('confirmed');
+  if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
+  // After 3s on the confirmation, switch to "Ventilation Réactivée"
+  setTimeout(() => {
+    showPage('ventilation');
+    // After 4s on ventilation page, trigger victory on all devices
+    setTimeout(() => {
+      publish('master-victory');
+      showEnd('victory'); // also show here in case Ably echo is slow
+    }, 4000);
+  }, 3000);
+}
+
+/* ════════════════════════════════════════════════════════
+   ABLY — Real-time sync
+   ════════════════════════════════════════════════════════ */
+let ablyChannel = null;
+try {
+  const ably = new Ably.Realtime('2-HTpw.um5J9g:1h7mQARfiS4itHjEHeteJhBb09drdSetOUpFHIaA28U');
+  ably.connection.on('connected', () => console.log('[Ably TC] ✅ Connecté'));
+  ably.connection.on('failed', () => console.error('[Ably TC] ❌ Échec'));
+  ablyChannel = ably.channels.get('helios-control');
+  ablyChannel.subscribe(onAblyMessage);
+} catch (e) { console.error('[Ably TC] init error:', e); }
+
+// BroadcastChannel fallback (same browser)
+let bc = null;
+try {
+  bc = new BroadcastChannel('helios-control');
+  bc.onmessage = (e) => onAblyMessage(e.data);
+} catch(e) {}
+
+function publish(name, data) {
+  data = data || {};
+  if (ablyChannel) {
+    try { ablyChannel.publish(name, data); } catch(e) { console.warn(e); }
+  }
+  if (bc) {
+    try { bc.postMessage({ name, data }); } catch(e) {}
+  }
+}
+
+function onAblyMessage(msg) {
+  const name = msg.name;
+  const data = msg.data || {};
+  console.log('[TC] msg:', name, data);
+
+  if (name === 'override-trigger') {
+    showRedButton();
+  } else if (name === 'press-state') {
+    if (data.device !== DEVICE_ID) {
+      remotePressState[data.device] = !!data.pressing;
+      updateRedCodeDisplay();
+    }
+  } else if (name === 'master-victory') {
+    showEnd('victory');
+  } else if (name === 'master-defeat') {
+    showEnd('defeat');
+  } else if (name === 'master-clear-end') {
+    hideEnd();
+  } else if (name === 'master-reset-red') {
+    hideRedButton();
+  } else if (name === 'master-reset-all') {
+    resetAll();
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   RED BUTTON / OVERRIDE
+   ════════════════════════════════════════════════════════ */
+const overlayRed = document.getElementById('overlay-red');
+const redBtn = document.getElementById('red-btn');
+const redCodeEl = document.getElementById('red-code');
+
+let redLocalPressing = false;
+let remotePressState = { phone: false, tablette: false, tableau: false };
+
+function showRedButton() {
+  previousPage = currentPage; // remember underlying page
+  overlayRed.classList.add('active');
+}
+function hideRedButton() {
+  overlayRed.classList.remove('active');
+  redLocalPressing = false;
+  remotePressState = { phone: false, tablette: false, tableau: false };
+  redCodeEl.textContent = '_ _ _';
+  redBtn.classList.remove('pressing');
+}
+
+redBtn.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  redBtn.setPointerCapture(e.pointerId);
+  redLocalPressing = true;
+  remotePressState[DEVICE_ID] = true;
+  redBtn.classList.add('pressing');
+  publish('press-state', { device: DEVICE_ID, pressing: true });
+  updateRedCodeDisplay();
+});
+function releaseRedBtn(e) {
+  if (!redLocalPressing) return;
+  redLocalPressing = false;
+  remotePressState[DEVICE_ID] = false;
+  redBtn.classList.remove('pressing');
+  publish('press-state', { device: DEVICE_ID, pressing: false });
+  updateRedCodeDisplay();
+}
+redBtn.addEventListener('pointerup', releaseRedBtn);
+redBtn.addEventListener('pointercancel', releaseRedBtn);
+redBtn.addEventListener('pointerleave', releaseRedBtn);
+
+function updateRedCodeDisplay() {
+  const allPressed = remotePressState.phone && remotePressState.tablette && remotePressState.tableau;
+  redCodeEl.textContent = allPressed ? CODE_FRAGMENT : '_ _ _';
+}
+
+/* ════════════════════════════════════════════════════════
+   END STATES
+   ════════════════════════════════════════════════════════ */
+function showEnd(kind) {
+  const overlay = document.getElementById('overlay-end');
+  const title = document.getElementById('end-title');
+  overlay.classList.remove('victory', 'defeat');
+  overlay.classList.add(kind);
+  if (kind === 'victory') title.textContent = 'VOUS AVEZ SAUVÉ LE PROJET HÉLIOS, FÉLICITATIONS';
+  else title.textContent = "VOUS N'ÊTES PAS PARVENUS À SAUVER LE PROJET HÉLIOS\nVOUS ÊTES MORTS ASPHYXIÉS";
+  overlay.classList.add('active');
+}
+function hideEnd() {
+  document.getElementById('overlay-end').classList.remove('active');
+}
+
+function resetAll() {
+  hideEnd();
+  hideRedButton();
+  cutSequence = [];
+  document.querySelectorAll('.wire').forEach(w => {
+    w.classList.remove('cut');
+    w.style.strokeDasharray = '';
+  });
+  stationStatus = { alpha: false, beta: false, gamma: false };
+  document.querySelectorAll('.station-btn').forEach(b => b.classList.remove('ok'));
+  document.querySelectorAll('.station-input, .gamma-input').forEach(i => {
+    i.classList.remove('ok');
+    i.disabled = false;
+    i.value = '';
+  });
+  faceAnalyzing = false; faceConfirmed = false;
+  const fs = document.getElementById('face-status');
+  fs.textContent = 'En attente du sujet…';
+  fs.classList.remove('analyzing', 'confirmed');
+  document.getElementById('face-circle').classList.remove('analyzing', 'confirmed');
+  document.getElementById('face-progress').classList.remove('active');
+  document.getElementById('face-progress-inner').style.width = '0%';
+  document.getElementById('loading-bar').style.width = '0%';
+  document.getElementById('loading-pct').textContent = '0%';
+  showPage('wires');
+}
+
+/* ════════════════════════════════════════════════════════
+   FULLSCREEN
+   ════════════════════════════════════════════════════════ */
+function goFullscreen() {
+  const el = document.documentElement;
+  if (el.requestFullscreen) el.requestFullscreen();
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+}
+</script>
+</body>
+</html>

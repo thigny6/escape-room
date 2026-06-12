@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Master — Contrôle Animateur</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; min-height: 100vh;
+    background: #0a0a14;
+    font-family: 'Courier New', monospace;
+    color: #d9e6ff; padding: 4vh 4vw;
+  }
+  .container { max-width: 540px; margin: 0 auto; }
+
+  h1 {
+    color: #ff8800; font-size: clamp(20px, 4vw, 26px);
+    margin-bottom: 1vh; letter-spacing: 2px;
+    text-transform: uppercase; text-align: center;
+  }
+  .subtitle {
+    color: #666; font-size: 12px;
+    text-align: center; margin-bottom: 4vh;
+    letter-spacing: 1px;
+  }
+
+  .section {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 20px; margin-bottom: 18px;
+  }
+  .section-title {
+    color: #88aaff; font-size: 13px;
+    letter-spacing: 2px; text-transform: uppercase;
+    margin-bottom: 14px; font-weight: 700;
+  }
+
+  .switch-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 0;
+  }
+  .switch-row + .switch-row { border-top: 1px solid rgba(255,255,255,0.05); }
+  .switch-label { font-size: 15px; color: #ccd; }
+  .switch-label.victory { color: #6bff9a; }
+  .switch-label.defeat  { color: #ff6b6b; }
+
+  .switch {
+    position: relative; width: 60px; height: 32px;
+    background: #2a2a3a; border-radius: 16px;
+    cursor: pointer; transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .switch::before {
+    content: ''; position: absolute;
+    width: 24px; height: 24px;
+    background: #fff; border-radius: 50%;
+    top: 4px; left: 4px;
+    transition: transform 0.2s;
+  }
+  .switch.on { background: #22c55e; }
+  .switch.on::before { transform: translateX(28px); }
+  .switch.defeat-on { background: #ef4444; }
+
+  .btn {
+    width: 100%; padding: 16px;
+    background: #2a3a5a;
+    border: 1px solid #4d6cff;
+    border-radius: 8px;
+    color: #fff; font-family: inherit;
+    font-size: 14px; font-weight: 700;
+    letter-spacing: 1.5px; cursor: pointer;
+    text-transform: uppercase;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn:hover { background: #3a4a6a; }
+  .btn + .btn { margin-top: 10px; }
+  .btn.reset { background: #5a2a2a; border-color: #ff6b6b; }
+  .btn.reset:hover { background: #6a3535; }
+  .btn.timer-start { background: #1f4a2a; border-color: #22c55e; }
+  .btn.timer-start:hover { background: #2a5a35; }
+  .btn.timer-pause { background: #4a3a1f; border-color: #f5a623; }
+  .btn.timer-pause:hover { background: #5a4a2a; }
+  .btn.timer-pause.resuming { background: #1f4a2a; border-color: #22c55e; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .status {
+    margin-top: 4vh; padding: 12px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 6px; font-size: 11px;
+    color: #888; line-height: 1.6;
+    text-align: center;
+  }
+  .status.connected { color: #22c55e; }
+  .status.error { color: #ff6b6b; }
+
+  .note {
+    font-size: 11px; color: #777;
+    margin-top: 6px; font-style: italic;
+  }
+
+  /* ───────── TIMER DISPLAY ───────── */
+  .timer-display {
+    text-align: center;
+    padding: 14px 0 10px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .timer-big {
+    font-size: clamp(36px, 9vw, 56px);
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 3px;
+    color: #4dff8a;
+    line-height: 1;
+    transition: color 0.3s;
+  }
+  .timer-big.warning { color: #ffaa00; }
+  .timer-big.critical {
+    color: #ff4444;
+    animation: timer-flash 0.9s infinite;
+  }
+  .timer-big.paused { color: #88aaff; opacity: 0.6; }
+  .timer-big.idle { color: #555; }
+  @keyframes timer-flash {
+    0%, 100% { opacity: 1 } 50% { opacity: 0.55 }
+  }
+  .timer-state {
+    text-align: center; font-size: 11px;
+    color: #88aaff; margin-top: 4px;
+    letter-spacing: 2px; min-height: 16px;
+  }
+
+  /* ───────── STATIONS ───────── */
+  .stations {
+    display: flex; gap: 10px;
+    justify-content: space-between;
+  }
+  .station-card {
+    flex: 1;
+    background: rgba(255, 42, 42, 0.08);
+    border: 1.5px solid rgba(255, 42, 42, 0.4);
+    border-radius: 8px;
+    padding: 14px 8px;
+    text-align: center;
+    transition: all 0.3s;
+  }
+  .station-card.ok {
+    background: rgba(34, 197, 94, 0.12);
+    border-color: rgba(34, 197, 94, 0.6);
+  }
+  .station-card .s-name {
+    font-size: 13px; font-weight: 700;
+    letter-spacing: 1.5px; color: #ccd;
+    margin-bottom: 6px;
+  }
+  .station-card .s-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    margin: 6px auto;
+    background: #ff2a2a;
+    box-shadow: 0 0 10px #ff2a2a;
+    animation: pulse-dot 1.4s infinite;
+  }
+  .station-card.ok .s-dot {
+    background: #22c55e;
+    box-shadow: 0 0 12px #22c55e;
+    animation: none;
+  }
+  .station-card .s-status {
+    font-size: 10px; letter-spacing: 1px;
+    color: #ff8888; margin-top: 4px;
+    text-transform: uppercase;
+  }
+  .station-card.ok .s-status { color: #88e6a8; }
+  @keyframes pulse-dot { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }
+
+  .station-progress {
+    margin-top: 12px;
+    text-align: center;
+    font-size: 11px;
+    color: #888;
+    letter-spacing: 1px;
+  }
+  .station-progress .ready {
+    color: #ffaa00; font-weight: 700;
+    animation: pulse-label 1.4s infinite;
+  }
+  @keyframes pulse-label { 0%, 100% { opacity: 1 } 50% { opacity: 0.5 } }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>MASTER CONTROL</h1>
+  <div class="subtitle">Panneau animateur — Projet Hélios</div>
+
+  <div class="section">
+    <div class="section-title">Compte à rebours (60 min)</div>
+    <div class="timer-display">
+      <div class="timer-big idle" id="timer-big">60:00</div>
+      <div class="timer-state" id="timer-state">— inactif —</div>
+    </div>
+    <button class="btn timer-start" onclick="startCountdown()">DÉMARRER COMPTE À REBOURS</button>
+    <button class="btn timer-pause" id="pause-btn" onclick="togglePause()">⏸ METTRE EN PAUSE</button>
+    <div class="note">La défaite se déclenche automatiquement à 0:00 si la reconnaissance faciale n'a pas eu lieu.</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Statut des stations</div>
+    <div class="stations">
+      <div class="station-card" id="card-alpha">
+        <div class="s-name">ALPHA</div>
+        <div class="s-dot"></div>
+        <div class="s-status">En attente</div>
+      </div>
+      <div class="station-card" id="card-beta">
+        <div class="s-name">BÊTA</div>
+        <div class="s-dot"></div>
+        <div class="s-status">En attente</div>
+      </div>
+      <div class="station-card" id="card-gamma">
+        <div class="s-name">GAMMA</div>
+        <div class="s-dot"></div>
+        <div class="s-status">En attente</div>
+      </div>
+    </div>
+    <div class="station-progress" id="station-progress">0 / 3 stations validées</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">État de fin de partie</div>
+    <div class="switch-row">
+      <span class="switch-label victory">VICTOIRE — Hélios sauvé</span>
+      <div class="switch" id="sw-victory" onclick="toggleVictory()"></div>
+    </div>
+    <div class="switch-row">
+      <span class="switch-label defeat">DÉFAITE — Asphyxie</span>
+      <div class="switch" id="sw-defeat" onclick="toggleDefeat()"></div>
+    </div>
+    <div class="note">Active sur tous les appareils. Désactiver le switch pour retirer l'écran.</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Actions</div>
+    <button class="btn" onclick="dismissRed()">RETIRER LES BOUTONS ROUGES</button>
+    <div class="note">Renvoie chaque appareil à sa page précédente.</div>
+    <br>
+    <button class="btn reset" onclick="resetAll()">RESET COMPLET (LANDING)</button>
+    <div class="note">Remet chaque appareil à sa première page, arrête le timer.</div>
+  </div>
+
+  <div class="status" id="status">Connexion en cours…</div>
+</div>
+
+<script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+<script>
+'use strict';
+
+const DURATION_MS = 60 * 60 * 1000; // 60 minutes
+
+let victoryOn = false;
+let defeatOn = false;
+
+// Timer state (mirrors what countdown_timer.html does locally)
+let timerEndTimestamp = 0;
+let timerPausedRemaining = DURATION_MS;
+let timerState = 'idle'; // 'idle' | 'running' | 'paused' | 'stopped'
+let timerTick = null;
+
+// Station state
+let stationStatus = { alpha: false, beta: false, gamma: false };
+
+let ablyChannel = null;
+let bc = null;
+
+const statusEl = document.getElementById('status');
+const pauseBtn = document.getElementById('pause-btn');
+const timerState_el = document.getElementById('timer-state');
+const timerBig = document.getElementById('timer-big');
+const stationProgress = document.getElementById('station-progress');
+
+try {
+  const ably = new Ably.Realtime('2-HTpw.um5J9g:1h7mQARfiS4itHjEHeteJhBb09drdSetOUpFHIaA28U');
+  ably.connection.on('connected', () => {
+    statusEl.textContent = '✓ Connecté au canal de contrôle';
+    statusEl.className = 'status connected';
+  });
+  ably.connection.on('failed', () => {
+    statusEl.textContent = '✗ Connexion échouée';
+    statusEl.className = 'status error';
+  });
+  ably.connection.on('disconnected', () => {
+    statusEl.textContent = '⚠ Déconnecté';
+    statusEl.className = 'status error';
+  });
+  ablyChannel = ably.channels.get('helios-control');
+  ablyChannel.subscribe(onAblyMessage);
+} catch (e) {
+  statusEl.textContent = '✗ Erreur d\'initialisation: ' + e.message;
+  statusEl.className = 'status error';
+}
+
+try {
+  bc = new BroadcastChannel('helios-control');
+  bc.onmessage = (e) => onAblyMessage(e.data);
+} catch(e) {}
+
+function onAblyMessage(msg) {
+  const name = msg.name;
+  const data = msg.data || {};
+  console.log('[Master] recv:', name, data);
+
+  if (name === 'station-validated' && data.station) {
+    markStation(data.station);
+  } else if (name === 'master-defeat' || name === 'master-victory') {
+    // External end-of-game → stop local timer if running
+    if (timerState === 'running' || timerState === 'paused') {
+      stopTimerDisplay(name === 'master-victory');
+    }
+  }
+}
+
+function publish(name, data) {
+  data = data || {};
+  console.log('[Master] publish:', name, data);
+  if (ablyChannel) { try { ablyChannel.publish(name, data); } catch(e) { console.warn(e); } }
+  if (bc) { try { bc.postMessage({ name, data }); } catch(e) {} }
+}
+
+/* ───────── STATIONS ───────── */
+function markStation(s) {
+  if (!(s in stationStatus)) return;
+  if (stationStatus[s]) return;
+  stationStatus[s] = true;
+  const card = document.getElementById('card-' + s);
+  if (card) {
+    card.classList.add('ok');
+    card.querySelector('.s-status').textContent = '✓ Validée';
+  }
+  refreshStationProgress();
+}
+function refreshStationProgress() {
+  const n = (stationStatus.alpha ? 1 : 0) + (stationStatus.beta ? 1 : 0) + (stationStatus.gamma ? 1 : 0);
+  if (n === 3) {
+    stationProgress.innerHTML = '<span class="ready">⚡ 3 / 3 — RECONNAISSANCE FACIALE IMMINENTE</span>';
+  } else {
+    stationProgress.textContent = `${n} / 3 stations validées`;
+  }
+}
+function resetStations() {
+  stationStatus = { alpha: false, beta: false, gamma: false };
+  ['alpha', 'beta', 'gamma'].forEach(s => {
+    const card = document.getElementById('card-' + s);
+    if (card) {
+      card.classList.remove('ok');
+      card.querySelector('.s-status').textContent = 'En attente';
+    }
+  });
+  refreshStationProgress();
+}
+
+/* ───────── TIMER ───────── */
+function startCountdown() {
+  if (timerState === 'running' || timerState === 'paused') {
+    if (!confirm('Un compte à rebours est déjà en cours. Redémarrer ?')) return;
+  }
+  publish('master-start-timer');
+  timerState = 'running';
+  timerPausedRemaining = DURATION_MS;
+  timerEndTimestamp = Date.now() + DURATION_MS;
+  startTimerTick();
+  refreshTimerUi();
+}
+
+function togglePause() {
+  if (timerState === 'running') {
+    publish('master-pause-timer');
+    timerPausedRemaining = Math.max(0, timerEndTimestamp - Date.now());
+    timerState = 'paused';
+    stopTimerTick();
+  } else if (timerState === 'paused') {
+    publish('master-resume-timer');
+    timerEndTimestamp = Date.now() + timerPausedRemaining;
+    timerState = 'running';
+    startTimerTick();
+  }
+  refreshTimerUi();
+}
+
+function startTimerTick() {
+  stopTimerTick();
+  timerTick = setInterval(tickTimer, 200);
+  tickTimer();
+}
+function stopTimerTick() {
+  if (timerTick) { clearInterval(timerTick); timerTick = null; }
+}
+function tickTimer() {
+  if (timerState !== 'running') return;
+  const remaining = timerEndTimestamp - Date.now();
+  if (remaining <= 0) {
+    renderTimer(0);
+    timerState = 'stopped';
+    stopTimerTick();
+    refreshTimerUi();
+    return;
+  }
+  renderTimer(remaining);
+}
+function renderTimer(ms) {
+  const totalSec = Math.ceil(ms / 1000);
+  const mm = Math.floor(totalSec / 60);
+  const ss = totalSec % 60;
+  timerBig.textContent = String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+
+  // Color shifts based on remaining time
+  timerBig.classList.remove('warning', 'critical', 'paused', 'idle');
+  if (timerState === 'paused') {
+    timerBig.classList.add('paused');
+  } else if (timerState === 'running') {
+    const minLeft = ms / 60000;
+    if (minLeft < 5) timerBig.classList.add('critical');
+    else if (minLeft < 15) timerBig.classList.add('warning');
+  } else if (timerState === 'idle') {
+    timerBig.classList.add('idle');
+  }
+}
+
+function stopTimerDisplay(victory) {
+  stopTimerTick();
+  timerState = 'stopped';
+  if (victory) {
+    timerBig.style.color = '#22c55e';
+    timerState_el.textContent = '✓ MISSION RÉUSSIE';
+    timerState_el.style.color = '#22c55e';
+  } else {
+    timerState_el.textContent = '✗ TEMPS ÉCOULÉ';
+    timerState_el.style.color = '#ff6b6b';
+  }
+  pauseBtn.disabled = true;
+}
+
+function refreshTimerUi() {
+  pauseBtn.disabled = (timerState !== 'running' && timerState !== 'paused');
+  if (timerState === 'idle') {
+    timerState_el.textContent = '— inactif —';
+    timerState_el.style.color = '#666';
+    pauseBtn.textContent = '⏸ METTRE EN PAUSE';
+    pauseBtn.classList.remove('resuming');
+    renderTimer(DURATION_MS);
+  } else if (timerState === 'paused') {
+    timerState_el.textContent = '⏸ EN PAUSE';
+    timerState_el.style.color = '#ffaa00';
+    pauseBtn.textContent = '▶ REPRENDRE';
+    pauseBtn.classList.add('resuming');
+    renderTimer(timerPausedRemaining);
+  } else if (timerState === 'running') {
+    timerState_el.textContent = '▶ EN COURS';
+    timerState_el.style.color = '#22c55e';
+    pauseBtn.textContent = '⏸ METTRE EN PAUSE';
+    pauseBtn.classList.remove('resuming');
+  } else if (timerState === 'stopped') {
+    pauseBtn.textContent = '⏸ METTRE EN PAUSE';
+  }
+}
+refreshTimerUi();
+refreshStationProgress();
+
+/* ───────── END STATE TOGGLES ───────── */
+function toggleVictory() {
+  const sw = document.getElementById('sw-victory');
+  victoryOn = !victoryOn;
+  if (victoryOn) {
+    sw.classList.add('on');
+    if (defeatOn) { defeatOn = false; document.getElementById('sw-defeat').classList.remove('on', 'defeat-on'); }
+    publish('master-victory');
+  } else {
+    sw.classList.remove('on');
+    publish('master-clear-end');
+  }
+}
+
+function toggleDefeat() {
+  const sw = document.getElementById('sw-defeat');
+  defeatOn = !defeatOn;
+  if (defeatOn) {
+    sw.classList.add('on', 'defeat-on');
+    if (victoryOn) { victoryOn = false; document.getElementById('sw-victory').classList.remove('on'); }
+    publish('master-defeat');
+  } else {
+    sw.classList.remove('on', 'defeat-on');
+    publish('master-clear-end');
+  }
+}
+
+function dismissRed() { publish('master-reset-red'); }
+
+function resetAll() {
+  if (!confirm('Reset complet de tous les appareils ?')) return;
+  victoryOn = false; defeatOn = false;
+  document.getElementById('sw-victory').classList.remove('on');
+  document.getElementById('sw-defeat').classList.remove('on', 'defeat-on');
+  resetStations();
+  stopTimerTick();
+  timerState = 'idle';
+  timerEndTimestamp = 0;
+  timerPausedRemaining = DURATION_MS;
+  timerBig.style.color = '';
+  refreshTimerUi();
+  publish('master-reset-all');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terminal de Recherche — Projet Hélios</title>
+<script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+<style>
+/* ── RESET ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100vw; height: 100vh; overflow: hidden;
+  font-family: 'Segoe UI', system-ui, Arial, sans-serif; font-size: 14px; }
+
+/* ── ANIMATIONS ─────────────────────────────────────────── */
+@keyframes fadeIn   { from { opacity:0 } to { opacity:1 } }
+@keyframes slideUp  { from { opacity:0; transform:translateY(24px) } to { opacity:1; transform:none } }
+@keyframes shake    { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-8px)} 40%,80%{transform:translateX(8px)} }
+@keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:.35} }
+@keyframes blink    { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* ════════════════════════════════════════════════════════
+   LOGIN SCREEN
+   ════════════════════════════════════════════════════════ */
+#login {
+  position: fixed; inset: 0; z-index: 999;
+  background: radial-gradient(ellipse 140% 100% at 50% 120%, #0d1f3c 0%, #060d1a 60%);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  transition: opacity .6s ease;
+}
+#login::before {
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(50,130,255,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(50,130,255,.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+#login::after {
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background: radial-gradient(circle 500px at 50% 50%, rgba(30,90,200,.12), transparent 70%);
+}
+#l-clock { font-size: 82px; font-weight: 200; color: #fff;
+  letter-spacing: -3px; margin-bottom: 4px;
+  text-shadow: 0 0 60px rgba(60,130,255,.35);
+  font-variant-numeric: tabular-nums; position: relative; z-index:1; }
+#l-date  { font-size: 15px; color: rgba(255,255,255,.45); font-weight:300;
+  margin-bottom: 56px; text-transform: capitalize; position:relative; z-index:1; }
+
+#l-box {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; align-items: center;
+  background: rgba(255,255,255,.04); backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,.08); border-radius: 20px;
+  padding: 44px 52px 36px; min-width: 340px;
+  animation: slideUp .5s ease both;
+}
+#l-avatar {
+  width: 84px; height: 84px; border-radius: 50%;
+  background: linear-gradient(135deg,#1a3a6b,#2d62c4);
+  border: 2px solid rgba(255,255,255,.15);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; font-weight: 300; color: rgba(255,255,255,.9);
+  margin-bottom: 14px; letter-spacing: 1px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.5);
+}
+#l-name { color: rgba(255,255,255,.85); font-size: 18px;
+  font-weight: 300; margin-bottom: 28px; letter-spacing: .5px; }
+
+#l-pw {
+  width: 100%; padding: 13px 18px;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
+  border-radius: 10px; color: #fff; font-size: 20px;
+  text-align: center; letter-spacing: 6px; outline: none;
+  transition: border-color .2s, background .2s; font-family: inherit;
+}
+#l-pw::placeholder { letter-spacing: 0; font-size: 14px; color: rgba(255,255,255,.28); }
+#l-pw:focus { border-color: rgba(60,140,255,.5); background: rgba(255,255,255,.1); }
+#l-pw.shake { animation: shake .4s ease; border-color: rgba(255,80,80,.6) !important; }
+#l-err { height: 20px; margin-top: 8px; color: rgba(255,100,100,.9);
+  font-size: 12px; text-align: center; }
+#l-hint { margin-top: 20px; color: rgba(255,255,255,.18); font-size: 11px; }
+#l-go {
+  margin-top: 14px; padding: 10px 28px;
+  background: rgba(37,99,235,.55); border: 1px solid rgba(37,99,235,.75);
+  color: #fff; font-size: 13px; letter-spacing: 1px;
+  border-radius: 8px; cursor: pointer; font-family: inherit;
+  transition: background .15s;
+}
+#l-go:hover, #l-go:active { background: rgba(37,99,235,.85); }
+
+/* ════════════════════════════════════════════════════════
+   DESKTOP
+   ════════════════════════════════════════════════════════ */
+#desktop {
+  position: fixed; inset: 0;
+  background: linear-gradient(150deg, #0c1b33 0%, #142847 55%, #0a1a30 100%);
+  display: none;
+}
+#desktop::before {
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(30,100,255,.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(30,100,255,.022) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+#d-icons {
+  position: absolute; top: 20px; left: 20px;
+  display: flex; flex-direction: column; gap: 6px; z-index: 1;
+}
+.d-icon {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 5px; width: 82px; padding: 8px 4px; border-radius: 6px;
+  cursor: default; transition: background .15s; user-select: none;
+}
+.d-icon:hover { background: rgba(255,255,255,.1); }
+.d-glyph  { font-size: 32px; }
+.d-label  { color:#fff; font-size:11px; text-align:center; line-height:1.3;
+  text-shadow: 0 1px 4px rgba(0,0,0,.9); word-break: break-word; }
+
+#wlayer { position: absolute; inset: 0 0 40px 0; pointer-events: none; }
+
+.win {
+  position: absolute; border-radius: 10px; overflow: hidden;
+  display: flex; flex-direction: column; pointer-events: all;
+  box-shadow: 0 28px 70px rgba(0,0,0,.75), 0 0 0 1px rgba(255,255,255,.04);
+  transition: opacity .15s ease;
+}
+.win-bar {
+  height: 32px; display: flex; align-items: center;
+  padding: 0 10px; gap: 8px; user-select: none;
+  cursor: grab; flex-shrink: 0;
+}
+.win-bar:active { cursor: grabbing; }
+.wbtn {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: none; flex-shrink: 0; cursor: pointer;
+  transition: filter .15s;
+}
+.wbtn:hover { filter: brightness(1.3); }
+.wbtn.cl  { background: #666; cursor: not-allowed; }
+.wbtn.mn  { background: #f5a623; }
+.wbtn.mx  { background: #666; cursor: not-allowed; }
+.win-ttl  { flex:1; text-align:center; font-size:12px; font-weight:500; }
+.win-body { flex:1; overflow: hidden; min-height: 0; }
+
+#wa {
+  width: 560px;
+  left: calc(50% - 280px);
+  top: 44px;
+  z-index: 20;
+  background: #0c0c0c;
+  max-height: calc(100vh - 80px);
+}
+#wa .win-bar { background: #1a0404; }
+#wa .win-ttl { color: #ff6060; font-size:11px; }
+#wa .win-body { overflow-y: auto; }
+
+.a-inner { padding: 22px 26px; font-family: 'Courier New', monospace; color: #ddd; }
+.a-head  { display:flex; align-items:flex-start; gap:14px; margin-bottom:18px; }
+.a-ico   { font-size:34px; flex-shrink:0; margin-top:2px; }
+.a-htxt h2 { font-size:17px; font-weight:700; color:#ff2a2a; letter-spacing:.5px; margin-bottom:4px; }
+.a-htxt p  { font-size:11px; color:#555; }
+.a-hr { border:none; border-top:1px solid #1c1c1c; margin:14px 0; }
+
+.s-grid { display:flex; flex-direction:column; gap:6px; }
+.s-row  { display:flex; align-items:center; gap:10px;
+  padding:7px 11px; background:#0e0e0e;
+  border:1px solid #191919; border-radius:4px; }
+.s-dot  { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.d-r  { background:#ff2a2a; animation:pulse 1.4s infinite; }
+.d-o  { background:#f5a623; animation:pulse 2s infinite; }
+.d-g  { background:#555; }
+.s-nm { flex:1; font-size:12px; color:#999; }
+.s-vl { font-size:11px; font-weight:700; }
+.vr { color:#ff4444; } .vo { color:#f5a623; } .vg { color:#555; }
+
+.a-sec { font-size:10px; color:#3a3a3a; letter-spacing:2px;
+  text-transform:uppercase; margin: 16px 0 8px; }
+.a-box { background:#0d0800; border:1px solid #271800; border-radius:4px;
+  padding:11px 13px; font-size:12px; color:#995522; line-height:1.7; }
+.a-box.muted { background:#080808; border-color:#111; color:#444; margin-top:10px; }
+.stns { display:flex; gap:7px; margin-top:10px; }
+.stn  { padding:3px 11px; border:1px solid #1e4030; border-radius:3px;
+  color:#44aa77; font-size:11px; background:#060f0a; }
+
+.ack-btn {
+  display:block; width:100%; margin-top:18px; padding:9px;
+  background:#120000; border:1px solid #380000; color:#ff6666;
+  font-size:11px; font-family:'Courier New',monospace;
+  border-radius:4px; cursor:pointer; letter-spacing:1px;
+  transition:background .2s;
+}
+.ack-btn:hover:not(:disabled) { background:#1c0000; }
+.ack-btn:disabled { opacity:.5; cursor:default; }
+
+#wj {
+  width: 660px;
+  left: calc(50% - 280px + 30px);
+  top: 24px;
+  height: 540px;
+  z-index: 10;
+  background: #1e1e1e;
+}
+#wj .win-bar { background: #252527; }
+#wj .win-ttl { color: #ccc; }
+#wj .win-body { overflow-y: auto; height: 100%; }
+
+#j-inner {
+  padding: 48px 56px;
+  background: #fffef8;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 13.5px; line-height: 1.9; color: #222;
+  min-height: 100%;
+}
+.j-main-title  { text-align:center; font-size:18px; font-weight:700; color:#111; margin-bottom:3px; }
+.j-subtitle    { text-align:center; font-size:11px; color:#aaa; font-style:italic;
+  margin-bottom:36px; padding-bottom:18px; border-bottom:1px solid #e5e5e5; }
+.j-entry       { margin-bottom:30px; }
+.j-date        { font-size:10.5px; font-weight:700; color:#999; letter-spacing:1.5px;
+  text-transform:uppercase; font-family:'Segoe UI',Arial,sans-serif;
+  margin-bottom:7px; border-bottom:1px solid #eee; padding-bottom:4px; }
+.j-p           { color:#333; margin-bottom:9px; }
+.j-p:last-child{ margin-bottom:0; }
+.j-note {
+  background:#fefae8; border-left:3px solid #c8960e;
+  padding:9px 14px; margin-top:11px;
+  font-style:italic; color:#5a4100;
+  font-size:13px; line-height:1.8;
+}
+
+#tb {
+  position: absolute; bottom:0; left:0; right:0; height:40px;
+  background: rgba(8,10,20,.97); backdrop-filter:blur(12px);
+  border-top:1px solid rgba(255,255,255,.05);
+  display:flex; align-items:center; padding:0 6px; gap:3px; z-index:200;
+}
+#tb-start {
+  width:36px; height:28px; border-radius:4px; flex-shrink:0; margin-right:6px;
+  background:rgba(37,99,235,.45); border:1px solid rgba(37,99,235,.65);
+  color:#fff; font-size:15px; cursor:default;
+  display:flex; align-items:center; justify-content:center;
+}
+.tb-btn {
+  height:28px; padding:0 11px; border-radius:4px; cursor:pointer;
+  display:flex; align-items:center; gap:6px; white-space:nowrap;
+  background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.09);
+  color:#999; font-size:11px; font-family:inherit;
+  transition:background .15s, color .15s;
+}
+.tb-btn:hover { background:rgba(255,255,255,.13); color:#ddd; }
+.tb-btn.active    { background:rgba(37,99,235,.32); border-color:rgba(37,99,235,.52); color:#fff; }
+.tb-btn.minimized { background:rgba(255,255,255,.03); border-style:dashed; color:#555; }
+.tb-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.tdr { background:#ff4444; animation:pulse 1.4s infinite; }
+.tdw { background:#aaa; }
+.tray {
+  margin-left:auto; display:flex; align-items:center; gap:14px; padding:0 10px;
+  color:#666; font-size:11px;
+}
+#tb-clock { text-align:right; line-height:1.4; font-variant-numeric:tabular-nums; }
+
+/* ───────── END OVERLAYS ───────── */
+#overlay-end {
+  position: fixed; inset: 0; z-index: 9000;
+  display: none; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 6vh 5vw; text-align: center;
+}
+#overlay-end.active { display: flex; }
+#overlay-end.victory {
+  background: radial-gradient(ellipse at center, #0a3d1a 0%, #062a10 70%);
+}
+#overlay-end.defeat {
+  background: radial-gradient(ellipse at center, #3d0a0a 0%, #2a0606 70%);
+}
+.end-title {
+  font-size: clamp(28px, 5vw, 52px);
+  font-weight: 900; line-height: 1.3;
+  letter-spacing: 2px; white-space: pre-line;
+  font-family: 'Segoe UI', system-ui, Arial, sans-serif;
+}
+#overlay-end.victory .end-title { color: #6bff9a; }
+#overlay-end.defeat .end-title { color: #ff6b6b; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login">
+  <div id="l-clock">00:00</div>
+  <div id="l-date">chargement...</div>
+  <div id="l-box">
+    <div id="l-avatar">MV</div>
+    <div id="l-name">Dr. Marc Vasseur</div>
+    <input type="password" id="l-pw" placeholder="Mot de passe" autocomplete="off" autofocus>
+    <div id="l-err"></div>
+    <button id="l-go" type="button">Se connecter</button>
+    <p id="l-hint">Appuyez sur Entrée ou cliquez sur Se connecter</p>
+  </div>
+</div>
+
+<!-- DESKTOP -->
+<div id="desktop">
+
+  <div id="d-icons">
+    <div class="d-icon" title="Accès restreint">
+      <div class="d-glyph">📁</div>
+      <div class="d-label">Rapports Hélios 2019–2026</div>
+    </div>
+    <div class="d-icon" title="Accès restreint">
+      <div class="d-glyph">📊</div>
+      <div class="d-label">Données terrain brutes</div>
+    </div>
+    <div class="d-icon" title="Accès restreint">
+      <div class="d-glyph">🔒</div>
+      <div class="d-label">Archives cryptées</div>
+    </div>
+    <div class="d-icon">
+      <div class="d-glyph">🗑️</div>
+      <div class="d-label">Corbeille</div>
+    </div>
+  </div>
+
+  <div id="wlayer">
+
+    <!-- ALERT WINDOW -->
+    <div class="win" id="wa">
+      <div class="win-bar" id="bar-wa">
+        <button class="wbtn cl"  title="Fermeture désactivée"></button>
+        <button class="wbtn mn"  onclick="toggleWin('a')" title="Réduire"></button>
+        <button class="wbtn mx"  title="Désactivé"></button>
+        <span   class="win-ttl">⚠&nbsp;&nbsp;Alerte Système — Protocole Hélios</span>
+      </div>
+      <div class="win-body">
+        <div class="a-inner">
+
+          <div class="a-head">
+            <div class="a-ico">⚠️</div>
+            <div class="a-htxt">
+              <h2>PROTOCOLE HÉLIOS — NIVEAU 2</h2>
+              <p id="alert-ts" onclick="adminTimestampClick()" style="cursor:default;">Système d'urgence automatique activé &middot; 09:21:04</p>
+            </div>
+          </div>
+
+          <hr class="a-hr">
+          <div class="a-sec">État des systèmes</div>
+          <div class="s-grid">
+            <div class="s-row">
+              <span class="s-dot d-r"></span>
+              <span class="s-nm">Ventilation principale</span>
+              <span class="s-vl vr">HORS SERVICE</span>
+            </div>
+            <div class="s-row">
+              <span class="s-dot d-r"></span>
+              <span class="s-nm">Verrouillage général</span>
+              <span class="s-vl vr">ACTIF</span>
+            </div>
+            <div class="s-row">
+              <span class="s-dot d-o"></span>
+              <span class="s-nm">Sonde C-7</span>
+              <span class="s-vl vo">ANOMALIE &plusmn;0,4 hPa</span>
+            </div>
+            <div class="s-row">
+              <span class="s-dot d-g" id="door-dot"></span>
+              <span class="s-nm">Accès salle de contrôle</span>
+              <span class="s-vl vg" id="door-val">RESTREINT</span>
+            </div>
+          </div>
+
+          <hr class="a-hr">
+          <div class="a-sec">Procédure requise</div>
+          <div class="a-box">
+            Accéder à la salle de contrôle via le <strong>terminal
+            mural de sécurité</strong> (code d'accès requis).<br><br>
+            Réactiver manuellement les trois stations :
+            <div class="stns">
+              <span class="stn">ALPHA</span>
+              <span class="stn">BÊTA</span>
+              <span class="stn">GAMMA</span>
+            </div>
+            <br>Consulter le manuel de sécurité pour la procédure complète.
+          </div>
+
+          <div class="a-box muted">
+            Ce terminal est en mode lecture seule.<br>
+            Aucune intervention à distance n'est possible depuis ce poste.
+          </div>
+
+          <button class="ack-btn" id="ack-btn" onclick="ackAlert()">
+            ACCUSÉ DE RÉCEPTION
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- JOURNAL WINDOW -->
+    <div class="win" id="wj">
+      <div class="win-bar" id="bar-wj">
+        <button class="wbtn cl"  title="Fermeture désactivée"></button>
+        <button class="wbtn mn"  onclick="toggleWin('j')" title="Réduire"></button>
+        <button class="wbtn mx"  title="Désactivé"></button>
+        <span   class="win-ttl">📄&nbsp;&nbsp;Journal de bord — Mission en cours.txt</span>
+      </div>
+      <div class="win-body">
+        <div id="j-inner">
+          <div class="j-main-title">JOURNAL DE BORD — MISSION EN COURS</div>
+          <div class="j-subtitle">Projet Hélios &nbsp;·&nbsp; Dr. Marc Vasseur &nbsp;·&nbsp; Mise à jour : 13/06/2026</div>
+
+          <div class="j-entry">
+            <div class="j-date">Lundi 8 juin 2026</div>
+            <p class="j-p">Réunion de coordination avec le labo central — vidéoconférence d'une heure que j'aurais préféré passer sur le terrain. Ils annoncent une mise à niveau obligatoire des protocoles de sécurité sur tous les terminaux actifs. Délai imposé : avant vendredi. Motif officiel : incident de Tromsø, rupture de confidentialité sur la station norvégienne. En pratique, tous mes codes d'accès doivent être remplacés par des codes alphanumériques.</p>
+            <p class="j-p">Côté mesures : ALPHA et BÊTA stables depuis 72 heures. GAMMA montre toujours cette légère dérive en fin de journée — entre 18h et 20h, les relevés grimpent de 0,2 à 0,3 hPa sans raison apparente. Je continue de surveiller.</p>
+          </div>
+
+          <div class="j-entry">
+            <div class="j-date">Mercredi 10 juin 2026</div>
+            <p class="j-p">La sonde C-7 donne des lectures aberrantes depuis ce matin. Variations de &plusmn;0,4 hPa sur des intervalles de 10 minutes — physiquement impossible en conditions stables. Soit la sonde vieillit, soit il y a une vraie anomalie de courte fenêtre. Je parie sur la sonde. Calibration prévue vendredi.</p>
+            <p class="j-p">Thomas passe demain préparer la salle avant la visite du groupe de samedi. Je lui laisse les instructions pour les stations.</p>
+            <p class="j-p">J'ai mis en place le nouveau code d'accès ce soir, comme demandé par le labo central. J'ai opté pour quelque chose que je ne pourrai jamais oublier : le nom du projet en cours, suivi de sa date de création — le jour, le mois, l'année, tout collé. Pour retrouver la date exacte de fondation, le rapport de la mission est encore quelque part dans ce bureau.</p>
+          </div>
+
+          <div class="j-entry">
+            <div class="j-date">Vendredi 12 juin 2026</div>
+            <p class="j-p">Calibration C-7 effectuée ce matin. Connecteur externe légèrement oxydé — rien de grave. Thomas a confirmé que la salle de contrôle est prête. Les trois stations sont en ordre, tout est en place.</p>
+            <p class="j-p">Sept ans déjà depuis le lancement officiel du projet. Je me souviens de cette première matinée à la station arctique comme si c'était hier — les premières courbes qui s'affichaient sur le terminal, l'excitation de comprendre ce qu'on avait en main. Le Projet Hélios est né ce jour-là.</p>
+          </div>
+
+          <div class="j-entry">
+            <div class="j-date">Samedi 13 juin 2026</div>
+            <p class="j-p">Départ pour le toit dans quelques minutes. Vérification finale de C-7 avant l'arrivée du groupe. Thomas et les étudiants sont attendus d'ici peu. J'ai laissé un mot sur le bureau.</p>
+            <p class="j-p">Retour rapide. 10 minutes max.</p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- TASKBAR -->
+  <div id="tb">
+    <div id="tb-start">&#8862;</div>
+    <button class="tb-btn active" id="tb-a" onclick="tbClick('a')">
+      <span class="tb-dot tdr"></span>Alerte Système
+    </button>
+    <button class="tb-btn" id="tb-j" onclick="tbClick('j')">
+      <span class="tb-dot tdw"></span>Journal de bord
+    </button>
+    <div class="tray">
+      <span title="Wi-Fi">&#x1F4F6;</span>
+      <span title="Volume">&#x1F508;</span>
+      <div id="tb-clock">00:00<br>--/--/----</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- END OVERLAYS -->
+<div id="overlay-end">
+  <div class="end-title" id="end-title"></div>
+</div>
+
+<script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+<script>
+'use strict';
+
+/* ─── CLOCK ─────────────────────────────────────────────── */
+const DAYS   = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+const MONTHS = ['janvier','février','mars','avril','mai','juin',
+                'juillet','août','septembre','octobre','novembre','décembre'];
+
+function updateClock() {
+  const n = new Date();
+  const hh = String(n.getHours()).padStart(2,'0');
+  const mm = String(n.getMinutes()).padStart(2,'0');
+  const dd = String(n.getDate()).padStart(2,'0');
+  const mo = String(n.getMonth()+1).padStart(2,'0');
+
+  const lc = $('l-clock'); if (lc) lc.textContent = hh+':'+mm;
+  const ld = $('l-date');
+  if (ld) ld.textContent = DAYS[n.getDay()]+' '+n.getDate()+' '+MONTHS[n.getMonth()]+' '+n.getFullYear();
+  const tc = $('tb-clock');
+  if (tc) tc.innerHTML = hh+':'+mm+'<br>'+dd+'/'+mo+'/'+n.getFullYear();
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+function $(id){ return document.getElementById(id); }
+
+/* ─── LOGIN ─────────────────────────────────────────────── */
+const PW = 'SCTLD';
+const pwEl  = $('l-pw');
+const errEl = $('l-err');
+const loginEl   = $('login');
+const desktopEl = $('desktop');
+
+pwEl.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); doLogin(); }
+  errEl.textContent = '';
+  pwEl.classList.remove('shake');
+});
+
+$('l-go').addEventListener('click', function(e) {
+  e.preventDefault();
+  doLogin();
+});
+
+function doLogin() {
+  if (pwEl.value === PW) {
+    loginEl.style.opacity = '0';
+    setTimeout(function() {
+      loginEl.style.display = 'none';
+      desktopEl.style.display = 'block';
+      desktopEl.style.opacity = '0';
+      desktopEl.style.transition = 'opacity .5s ease';
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() { desktopEl.style.opacity = '1'; });
+      });
+    }, 600);
+  } else {
+    errEl.textContent = 'Mot de passe incorrect';
+    pwEl.value = '';
+    pwEl.classList.remove('shake');
+    void pwEl.offsetWidth;
+    pwEl.classList.add('shake');
+    setTimeout(function() {
+      errEl.textContent = '';
+      pwEl.classList.remove('shake');
+    }, 2200);
+  }
+}
+
+/* ─── WINDOW MANAGEMENT ─────────────────────────────────── */
+let topZ = 20;
+
+const W = {
+  a: { el:null, bar:null, tbbtn:null, minimized:false, z:20 },
+  j: { el:null, bar:null, tbbtn:null, minimized:false, z:10 }
+};
+
+function initWindows() {
+  W.a.el    = $('wa');    W.a.bar = $('bar-wa'); W.a.tbbtn = $('tb-a');
+  W.j.el    = $('wj');    W.j.bar = $('bar-wj'); W.j.tbbtn = $('tb-j');
+  W.a.el.style.zIndex = 20;
+  W.j.el.style.zIndex = 10;
+
+  ['a','j'].forEach(function(id) {
+    W[id].el.addEventListener('mousedown', function() { front(id); });
+    makeDraggable(W[id].el, W[id].bar);
+  });
+  syncTb();
+}
+
+function front(id) {
+  topZ++;
+  W[id].el.style.zIndex = topZ;
+  W[id].z = topZ;
+  syncTb();
+}
+
+function toggleWin(id) {
+  const w = W[id];
+  if (w.minimized) {
+    w.minimized = false;
+    w.el.style.opacity = '0';
+    w.el.style.display = 'flex';
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() { w.el.style.opacity = '1'; });
+    });
+    front(id);
+  } else {
+    w.minimized = true;
+    w.el.style.opacity = '0';
+    setTimeout(function() { if (w.minimized) w.el.style.display = 'none'; }, 150);
+  }
+  setTimeout(syncTb, 20);
+}
+
+function tbClick(id) {
+  const w = W[id];
+  if (w.minimized) {
+    toggleWin(id);
+  } else {
+    let isTop = true;
+    Object.keys(W).forEach(function(oid) {
+      if (oid !== id && !W[oid].minimized && W[oid].z > w.z) isTop = false;
+    });
+    if (isTop) toggleWin(id);
+    else front(id);
+  }
+}
+
+function syncTb() {
+  let topId = null, topVal = -1;
+  Object.keys(W).forEach(function(id) {
+    if (!W[id].minimized && W[id].z > topVal) { topVal = W[id].z; topId = id; }
+  });
+  Object.keys(W).forEach(function(id) {
+    const btn = W[id].tbbtn;
+    btn.classList.remove('active','minimized');
+    if (W[id].minimized)  btn.classList.add('minimized');
+    else if (id === topId) btn.classList.add('active');
+  });
+}
+
+/* ─── DRAGGING ───────────────────────────────────────────── */
+function makeDraggable(winEl, barEl) {
+  let on = false, ox, oy, ol, ot;
+  barEl.addEventListener('mousedown', function(e) {
+    if (e.target.classList.contains('wbtn')) return;
+    on = true;
+    const r = winEl.getBoundingClientRect();
+    ox = e.clientX; oy = e.clientY;
+    ol = r.left;    ot = r.top;
+    document.body.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!on) return;
+    winEl.style.left = (ol + e.clientX - ox) + 'px';
+    winEl.style.top  = (ot + e.clientY - oy) + 'px';
+  });
+  document.addEventListener('mouseup', function() {
+    if (!on) return;
+    on = false;
+    document.body.style.cursor = '';
+  });
+}
+
+/* ─── ALERT ACK ─────────────────────────────────────────── */
+function ackAlert() {
+  const b = $('ack-btn');
+  b.textContent = 'COMPRIS — EN ATTENTE D\'INTERVENTION';
+  b.disabled = true;
+}
+
+/* ─── DOOR SYNC ─────────────────────────────────────────── */
+let _doorIsOpen = false;
+
+function updateDoorStatus(isOpen) {
+  _doorIsOpen = isOpen;
+  const dot = document.getElementById('door-dot');
+  const val = document.getElementById('door-val');
+  if (!dot || !val) return;
+  if (isOpen) {
+    dot.className = 's-dot';
+    dot.style.cssText = 'background:#22c55e;animation:none;';
+    val.className = 's-vl';
+    val.style.color = '#22c55e';
+    val.textContent = 'AUTORISÉ';
+  } else {
+    dot.className = 's-dot d-g';
+    dot.style.cssText = '';
+    val.className = 's-vl vg';
+    val.style.color = '';
+    val.textContent = 'RESTREINT';
+  }
+}
+
+try {
+  const _bc = new BroadcastChannel('helios_game');
+  _bc.onmessage = function(e) {
+    if (e.data === 'DOOR_OPEN')  updateDoorStatus(true);
+    if (e.data === 'DOOR_RESET') updateDoorStatus(false);
+  };
+} catch(e) {}
+
+setInterval(function() {
+  try {
+    if (localStorage.getItem('helios_door_status') === 'OPEN') updateDoorStatus(true);
+  } catch(e) {}
+}, 2000);
+
+let _adminClicks = 0, _adminTimer = null;
+function adminTimestampClick() {
+  _adminClicks++;
+  clearTimeout(_adminTimer);
+  _adminTimer = setTimeout(function() { _adminClicks = 0; }, 600);
+  if (_adminClicks >= 3) {
+    _adminClicks = 0;
+    const isCurrentlyOpen = document.getElementById('door-val').textContent === 'AUTORISÉ';
+    updateDoorStatus(!isCurrentlyOpen);
+  }
+}
+
+/* ─── ABLY: door channel + control channel ──────────────── */
+try {
+  const _ably = new Ably.Realtime('2-HTpw.um5J9g:1h7mQARfiS4itHjEHeteJhBb09drdSetOUpFHIaA28U');
+  _ably.connection.on('connected',    function() { console.log('[Ably PC] ✅ Connecté'); });
+  _ably.connection.on('failed',       function() { console.error('[Ably PC] ❌ Connexion échouée'); });
+  _ably.connection.on('disconnected', function() { console.warn('[Ably PC] ⚠️ Déconnecté'); });
+
+  const _ch = _ably.channels.get('helios-door');
+  _ch.subscribe('status', function(msg) {
+    console.log('[Ably PC] door:', msg.data);
+    if (msg.data === 'DOOR_OPEN')  updateDoorStatus(true);
+    if (msg.data === 'DOOR_RESET') updateDoorStatus(false);
+  });
+
+  const _ctrlCh = _ably.channels.get('helios-control');
+  _ctrlCh.subscribe(function(msg) {
+    console.log('[PC] control:', msg.name);
+    if (msg.name === 'master-victory') showEnd('victory');
+    else if (msg.name === 'master-defeat') showEnd('defeat');
+    else if (msg.name === 'master-clear-end') hideEnd();
+    else if (msg.name === 'master-reset-all') { hideEnd(); /* PC stays logged in */ }
+  });
+} catch(e) { console.error('[Ably PC] Exception init:', e); }
+
+try {
+  const _bcCtrl = new BroadcastChannel('helios-control');
+  _bcCtrl.onmessage = function(e) {
+    const d = e.data;
+    if (!d) return;
+    if (d.name === 'master-victory') showEnd('victory');
+    else if (d.name === 'master-defeat') showEnd('defeat');
+    else if (d.name === 'master-clear-end') hideEnd();
+    else if (d.name === 'master-reset-all') hideEnd();
+  };
+} catch(e) {}
+
+/* ─── END STATES ────────────────────────────────────────── */
+function showEnd(kind) {
+  const overlay = $('overlay-end');
+  const title = $('end-title');
+  overlay.classList.remove('victory', 'defeat');
+  overlay.classList.add(kind);
+  if (kind === 'victory') title.textContent = 'VOUS AVEZ SAUVÉ LE PROJET HÉLIOS,\nFÉLICITATIONS';
+  else title.textContent = "VOUS N'ÊTES PAS PARVENUS À SAUVER LE PROJET HÉLIOS\n\nVOUS ÊTES MORTS ASPHYXIÉS";
+  overlay.classList.add('active');
+}
+function hideEnd() { $('overlay-end').classList.remove('active'); }
+
+/* ─── INIT ───────────────────────────────────────────────── */
+window.addEventListener('load', initWindows);
+</script>
+</body>
+</html>
